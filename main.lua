@@ -1,6 +1,7 @@
 local Character = require("character")
 local Camera = require("camera")
 local Menu = require("menu")
+local Battle = require("battle")
 
 local cols = 10
 local rows = 10
@@ -16,9 +17,7 @@ local characterScale = 1.0
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
 local camera = nil
-local gameMode = "menu"
-local moveRange = {}
-local moveTarget = { column = 1, row = 1 }
+local battle = nil
 
 local map = {}
 local characters = {}
@@ -45,128 +44,6 @@ local function getActiveCharacter()
   return characters[currentTurn]
 end
 
-local function isInMap(column, row)
-  return column >= 1 and column <= cols and row >= 1 and row <= rows
-end
-
-local function getHexNeighbors(column, row)
-  local neighbors = {}
-  if column % 2 == 0 then
-    neighbors = {
-      {column + 1, row},
-      {column - 1, row},
-      {column, row - 1},
-      {column, row + 1},
-      {column + 1, row - 1},
-      {column - 1, row - 1},
-    }
-  else
-    neighbors = {
-      {column + 1, row},
-      {column - 1, row},
-      {column, row - 1},
-      {column, row + 1},
-      {column + 1, row + 1},
-      {column - 1, row + 1},
-    }
-  end
-  return neighbors
-end
-
-local function getReachableTiles(startColumn, startRow, maxMoves)
-  local reachable = {}
-  if maxMoves < 1 then
-    return reachable
-  end
-
-  local queue = {
-    {startColumn, startRow, 0},
-  }
-  local visited = {[startColumn .. "," .. startRow] = 0}
-
-  local head = 1
-  while head <= #queue do
-    local node = queue[head]
-    head = head + 1
-
-    local column = node[1]
-    local row = node[2]
-    local distance = node[3]
-
-    local key = column .. "," .. row
-    if distance > 0 then
-      reachable[key] = true
-    end
-
-    if distance < maxMoves then
-      for _, neighbor in ipairs(getHexNeighbors(column, row)) do
-        local nextColumn = neighbor[1]
-        local nextRow = neighbor[2]
-        local nextKey = nextColumn .. "," .. nextRow
-
-        if isInMap(nextColumn, nextRow) and map[nextColumn][nextRow] and not visited[nextKey] then
-          visited[nextKey] = distance + 1
-          table.insert(queue, {nextColumn, nextRow, distance + 1})
-        end
-      end
-    end
-  end
-
-  return reachable
-end
-
-local function isReachableForMove(column, row)
-  return moveRange[column .. "," .. row]
-end
-
-local function startMoveSelection(active)
-  moveRange = getReachableTiles(active.column, active.row, active.mov)
-  moveTarget.column = active.column
-  moveTarget.row = active.row
-  gameMode = "move"
-end
-
-local function moveTargetByKey(key)
-  local nextColumn = moveTarget.column
-  local nextRow = moveTarget.row
-  local neighbors = getHexNeighbors(moveTarget.column, moveTarget.row)
-  local candidates = {}
-
-  if key == "left" then
-    candidates[1] = neighbors[2]
-  elseif key == "right" then
-    candidates[1] = neighbors[1]
-  elseif key == "up" then
-    candidates[1] = neighbors[3]
-    candidates[2] = neighbors[5]
-  elseif key == "down" then
-    candidates[1] = neighbors[4]
-    candidates[2] = neighbors[6]
-  end
-
-  for _, candidate in ipairs(candidates) do
-    if candidate then
-      local c = candidate[1]
-      local r = candidate[2]
-      if isInMap(c, r) and isReachableForMove(c, r) then
-        nextColumn = c
-        nextRow = r
-        break
-      end
-    end
-  end
-
-  moveTarget.column = nextColumn
-  moveTarget.row = nextRow
-end
-
-local function confirmMove(active)
-  if isReachableForMove(moveTarget.column, moveTarget.row) then
-    active:setPosition(moveTarget.column, moveTarget.row)
-    gameMode = "menu"
-  end
-end
-
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
 
@@ -183,10 +60,9 @@ function love.load()
       map[c][r] = true
     end
   end
+  battle = Battle.new(cols, rows, map)
 
   characters = loadSprites()
-  local mapWidth = math.floor((cols - 1) * tileSpacingX + tileW + 1)
-  local mapHeight = math.floor(rows * tileSpacingY + tileH * 0.5 + 1)
   local screenW, screenH = love.window.getDesktopDimensions(1)
   love.window.setMode(screenW, screenH, {
     fullscreen = true,
@@ -199,11 +75,11 @@ end
 function love.update()
   local active = getActiveCharacter()
   if active then
+    local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
     local focusRow = active.row
     if gameMode == "move" then
-      focusColumn = moveTarget.column
-      focusRow = moveTarget.row
+      focusColumn, focusRow = battle:getCursorColumnRow(active)
     end
 
     local tileX, tileY = gridToScreen(focusColumn, focusRow)
@@ -213,13 +89,13 @@ function love.update()
     camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
     camera:setTarget(focusX, focusY)
     camera:update()
-    if gameMode == "move" then
-      moveRange = moveRange
-    else
-      moveRange = {}
+    if battle then
+      battle:setMode(gameMode)
     end
   else
-    moveRange = {}
+    if battle then
+      battle:setMode("menu")
+    end
   end
 end
 
@@ -241,9 +117,8 @@ function love.draw()
     for r = 1, rows do
       if map[c][r] then
         local x, y = gridToScreen(c, r)
-        local key = c .. "," .. r
         love.graphics.draw(tile, x, y)
-        if active and gameMode == "move" and isReachableForMove(c, r) then
+        if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
           love.graphics.setColor(1, 1, 0, 0.5)
           love.graphics.draw(tile, x, y)
           love.graphics.setColor(1, 1, 1, 1)
@@ -254,8 +129,9 @@ function love.draw()
 
   if active then
     local cursorX, cursorY
-    if gameMode == "move" then
-      cursorX, cursorY = gridToScreen(moveTarget.column, moveTarget.row)
+    if battle and battle:isMoveMode() then
+      local targetColumn, targetRow = battle:getCursorColumnRow(active)
+      cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
       cursorX, cursorY = gridToScreen(active.column, active.row)
     end
@@ -310,25 +186,34 @@ end
 
 function love.keypressed(key)
   local active = getActiveCharacter()
+  local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
   elseif gameMode == "move" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
-      moveTargetByKey(key)
+      if battle then
+        battle:moveTargetByKey(key)
+      end
     elseif key == "return" or key == "kpenter" then
       if active then
-        confirmMove(active)
+        if battle then
+          battle:confirmMove(active)
+        end
         Menu:reset()
       end
     elseif key == "tab" then
       -- cancel move mode and keep current turn
-      gameMode = "menu"
+      if battle then
+        battle:cancelMoveMode()
+      end
       Menu:reset()
     end
   elseif key == "return" or key == "kpenter" then
     if active then
       if Menu:isMoveSelected() then
-        startMoveSelection(active)
+        if battle then
+          battle:startMoveSelection(active)
+        end
       end
     end
   elseif key == "up" then
@@ -338,7 +223,9 @@ function love.keypressed(key)
   elseif key == "tab" then
     currentTurn = currentTurn % #characters + 1
     Menu:reset()
-    gameMode = "menu"
+    if battle then
+      battle:setMode("menu")
+    end
   elseif key == "1" then
     Menu:setIndex(1)
   elseif key == "2" then
