@@ -240,23 +240,47 @@ local function getDeathAnimationRenderState(character)
   local flipScaleX = math.cos(ratio * math.pi * 3)
   local alpha = 1 - ratio
 
-  return baseX, baseY - rise, 0, flipScaleX, alpha
+  return baseX, baseY - rise, 0, flipScaleX, 1, alpha
+end
+
+local function getIdleBreathingState(character)
+  if not battle then
+    return 1, 1
+  end
+
+  local attackAnimation = battle:getAttackAnimation()
+  local deathAnimation = battle:getDeathAnimation()
+  if battle:getAnimationState(character) then
+    return 1, 1
+  end
+  if attackAnimation and (attackAnimation.attacker == character or attackAnimation.target == character) then
+    return 1, 1
+  end
+  if deathAnimation and deathAnimation.character == character then
+    return 1, 1
+  end
+
+  local phase = (love.timer.getTime() * 2.2) + (character.column * 0.31) + (character.row * 0.17)
+  local breath = math.sin(phase)
+  local scaleXFactor = 1 - (0.018 * breath)
+  local scaleYFactor = 1 + (0.03 * breath)
+  return scaleXFactor, scaleYFactor
 end
 
 local function getCharacterRenderState(character)
-  local x, y, jumpOffset, scaleXFactor, alpha = getDeathAnimationRenderState(character)
+  local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = getDeathAnimationRenderState(character)
   if x then
-    return x, y, jumpOffset, scaleXFactor, alpha
+    return x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha
   end
 
   x, y, jumpOffset = getAnimationRenderState(character)
   if x then
-    return x, y, jumpOffset, 1, 1
+    return x, y, jumpOffset, 1, 1, 1
   end
 
   x, y, jumpOffset = getAttackAnimationRenderState(character)
   if x then
-    return x, y, jumpOffset or 0, 1, 1
+    return x, y, jumpOffset or 0, 1, 1, 1
   end
 
   return nil
@@ -410,11 +434,11 @@ function love.draw()
 
   local characterDrawList = {}
   for _, character in ipairs(characters) do
-    local x, y, jumpOffset, scaleXFactor, alpha = getCharacterRenderState(character)
+    local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = getCharacterRenderState(character)
     if not x then
       x, y = gridToScreen(character.column, character.row)
       jumpOffset = 0
-      scaleXFactor = 1
+      scaleXFactor, scaleYFactor = getIdleBreathingState(character)
       alpha = 1
     end
     characterDrawList[#characterDrawList + 1] = {
@@ -423,6 +447,7 @@ function love.draw()
       y = y,
       jumpOffset = jumpOffset or 0,
       scaleXFactor = scaleXFactor or 1,
+      scaleYFactor = scaleYFactor or 1,
       alpha = alpha or 1,
       sortY = y + (tileH * 0.5),
       sortX = x + (tileW * 0.5),
@@ -441,7 +466,9 @@ function love.draw()
     local spriteW = character.sprite:getWidth()
     local spriteH = character.sprite:getHeight()
     local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
-    local directionScale = (character.direction == "left" and -scale or scale) * entry.scaleXFactor
+    local scaleX = scale * entry.scaleXFactor
+    local scaleY = scale * entry.scaleYFactor
+    local directionScale = character.direction == "left" and -scaleX or scaleX
     local tileCenterX = entry.x + (tileW * 0.5)
     local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
     love.graphics.setColor(1, 1, 1, entry.alpha)
@@ -451,7 +478,7 @@ function love.draw()
       tileCenterY + characterFootOffsetY,
       0,
       directionScale,
-      scale,
+      scaleY,
       spriteW * 0.5,
       spriteH
     )
