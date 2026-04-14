@@ -34,12 +34,60 @@ local obstacleTiles = {
 local characters = {}
 local currentTurn = 1
 
+local availableClasses = {
+  {className = "archer", sprites = {"archer_boy", "archer_girl"}},
+  {className = "atk_mov", sprites = {"atk_mov_boy", "atk_mov_girl"}},
+  {className = "counter", sprites = {"counter_boy", "counter_girl"}},
+  {className = "free", sprites = {"free_boy", "free_girl"}},
+  {className = "grab", sprites = {"grab_boy", "grab_girl"}},
+  {className = "healer", sprites = {"healer_boy", "healer_girl"}},
+  {className = "lancer", sprites = {"lancer_boy", "lancer_girl"}},
+  {className = "tactician", sprites = {"tactician_boy", "tactician_girl"}},
+  {className = "tank", sprites = {"tank_boy", "tank_girl"}},
+}
+
+local spawnPositions = {
+  {column = 2, row = 3, direction = "right"},
+  {column = 6, row = 2, direction = "right"},
+  {column = 6, row = 5, direction = "right"},
+  {column = 10, row = 3, direction = "left"},
+  {column = 10, row = 6, direction = "left"},
+}
+
+local function shuffledCopy(list)
+  local copy = {}
+  for index, value in ipairs(list) do
+    copy[index] = value
+  end
+
+  for index = #copy, 2, -1 do
+    local swapIndex = math.random(index)
+    copy[index], copy[swapIndex] = copy[swapIndex], copy[index]
+  end
+
+  return copy
+end
+
 local function loadSprites()
-  return {
-    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, Character.rollStats(16), "right"),
-    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, Character.rollStats(16), "left"),
-    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, Character.rollStats(16), "right"),
-  }
+  local roster = {}
+  local classPool = shuffledCopy(availableClasses)
+
+  for index, spawn in ipairs(spawnPositions) do
+    local classInfo = classPool[index]
+    local spriteName = classInfo.sprites[math.random(#classInfo.sprites)]
+    local spritePath = "assets/sprites/heroes/" .. spriteName .. ".png"
+    roster[#roster + 1] = Character.new(
+      classInfo.className .. "_" .. index,
+      spritePath,
+      spawn.column,
+      spawn.row,
+      Character.rollStats(16),
+      spawn.direction,
+      classInfo.className
+    )
+  end
+
+  return roster
 end
 
 local function gridToScreen(column, row)

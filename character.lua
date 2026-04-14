@@ -19,16 +19,32 @@ function Character.rollStats(totalPoints)
   return stats
 end
 
-function Character.new(name, spritePath, column, row, stats, direction)
+function Character.inferClassName(name)
+  return (name and name:match("^[^_]+")) or "fighter"
+end
+
+function Character.attackRangeForClass(className)
+  if className == "archer" then
+    return 4
+  elseif className == "lancer" then
+    return 2
+  end
+  return 1
+end
+
+function Character.new(name, spritePath, column, row, stats, direction, className)
   local resolvedStats = stats or Character.rollStats(16)
+  local resolvedClassName = className or Character.inferClassName(name)
   local instance = {
     name = name,
+    className = resolvedClassName,
     spritePath = spritePath,
     sprite = love.graphics.newImage(spritePath),
     hp = resolvedStats.hp or 5,
     mov = resolvedStats.mov or 5,
     def = resolvedStats.def or 2,
     atk = resolvedStats.atk or 2,
+    attackRange = resolvedStats.attackRange or Character.attackRangeForClass(resolvedClassName),
     column = column,
     row = row,
     direction = direction or "right",

@@ -210,6 +210,57 @@ function Battle:getHexNeighbors(column, row)
   end
 end
 
+function Battle:getGridVector(column, row)
+  local x = (column - 1) * 0.75
+  local y = row - 1
+  if column % 2 == 1 then
+    y = y + 0.5
+  end
+  return x, y
+end
+
+function Battle:getTilesInRange(startColumn, startRow, maxRange)
+  local tiles = {}
+  if maxRange < 1 then
+    return tiles
+  end
+
+  local queue = {
+    {startColumn, startRow, 0},
+  }
+  local visited = {[startColumn .. "," .. startRow] = 0}
+  local head = 1
+
+  while head <= #queue do
+    local node = queue[head]
+    head = head + 1
+
+    local column = node[1]
+    local row = node[2]
+    local distance = node[3]
+    local key = column .. "," .. row
+
+    if distance > 0 then
+      tiles[key] = distance
+    end
+
+    if distance < maxRange then
+      for _, neighbor in ipairs(self:getHexNeighbors(column, row)) do
+        local nextColumn = neighbor[1]
+        local nextRow = neighbor[2]
+        local nextKey = nextColumn .. "," .. nextRow
+
+        if self:isInMap(nextColumn, nextRow) and not visited[nextKey] then
+          visited[nextKey] = distance + 1
+          queue[#queue + 1] = {nextColumn, nextRow, distance + 1}
+        end
+      end
+    end
+  end
+
+  return tiles
+end
+
 function Battle:getReachableTiles(startColumn, startRow, maxMoves)
   local reachable = {}
   if maxMoves < 1 then
@@ -343,16 +394,63 @@ end
 
 function Battle:getAttackableTiles(activeCharacter)
   local attackable = {}
+  local tilesInRange = self:getTilesInRange(
+    activeCharacter.column,
+    activeCharacter.row,
+    activeCharacter.attackRange or 1
+  )
 
-  for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
-    local column = neighbor[1]
-    local row = neighbor[2]
-    if self:getCharacterAt(column, row, activeCharacter) then
-      attackable[column .. "," .. row] = true
+  for _, character in ipairs(self.characters) do
+    if character ~= activeCharacter then
+      local key = character.column .. "," .. character.row
+      if tilesInRange[key] then
+        attackable[key] = true
+      end
     end
   end
 
   return attackable
+end
+
+function Battle:selectAttackTargetInDirection(originColumn, originRow, key)
+  local originX, originY = self:getGridVector(originColumn, originRow)
+  local bestColumn = originColumn
+  local bestRow = originRow
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isAttackable(character.column, character.row) then
+      local targetX, targetY = self:getGridVector(character.column, character.row)
+      local dx = targetX - originX
+      local dy = targetY - originY
+      local primary = nil
+      local secondary = nil
+
+      if key == "left" and dx < 0 then
+        primary = -dx
+        secondary = math.abs(dy)
+      elseif key == "right" and dx > 0 then
+        primary = dx
+        secondary = math.abs(dy)
+      elseif key == "up" and dy < 0 then
+        primary = -dy
+        secondary = math.abs(dx)
+      elseif key == "down" and dy > 0 then
+        primary = dy
+        secondary = math.abs(dx)
+      end
+
+      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = character.column
+        bestRow = character.row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
 end
 
 function Battle:startAttackSelection(activeCharacter)
@@ -361,16 +459,28 @@ function Battle:startAttackSelection(activeCharacter)
   end
 
   self.attackRange = self:getAttackableTiles(activeCharacter)
+  local tilesInRange = self:getTilesInRange(
+    activeCharacter.column,
+    activeCharacter.row,
+    activeCharacter.attackRange or 1
+  )
+  local nearestDistance = nil
 
-  for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
-    local column = neighbor[1]
-    local row = neighbor[2]
-    if self:isAttackable(column, row) then
-      self.attackTarget.column = column
-      self.attackTarget.row = row
-      self.mode = "attack"
-      return true
+  for _, character in ipairs(self.characters) do
+    if character ~= activeCharacter then
+      local key = character.column .. "," .. character.row
+      local distance = tilesInRange[key]
+      if distance and (nearestDistance == nil or distance < nearestDistance) then
+        nearestDistance = distance
+        self.attackTarget.column = character.column
+        self.attackTarget.row = character.row
+      end
     end
+  end
+
+  if nearestDistance then
+    self.mode = "attack"
+    return true
   end
 
   return false
@@ -422,37 +532,11 @@ function Battle:moveTargetByKey(key)
 end
 
 function Battle:moveAttackTargetByKey(activeCharacter, key)
-  local nextColumn = self.attackTarget.column
-  local nextRow = self.attackTarget.row
-  local neighbors = self:getHexNeighbors(activeCharacter.column, activeCharacter.row)
-  local candidates = {}
-
-  if key == "left" then
-    candidates[1] = neighbors[2]
-  elseif key == "right" then
-    candidates[1] = neighbors[1]
-  elseif key == "up" then
-    candidates[1] = neighbors[3]
-    candidates[2] = neighbors[5]
-  elseif key == "down" then
-    candidates[1] = neighbors[4]
-    candidates[2] = neighbors[6]
-  end
-
-  for _, candidate in ipairs(candidates) do
-    if candidate then
-      local column = candidate[1]
-      local row = candidate[2]
-      if self:isAttackable(column, row) then
-        nextColumn = column
-        nextRow = row
-        break
-      end
-    end
-  end
-
-  self.attackTarget.column = nextColumn
-  self.attackTarget.row = nextRow
+  self.attackTarget.column, self.attackTarget.row = self:selectAttackTargetInDirection(
+    self.attackTarget.column,
+    self.attackTarget.row,
+    key
+  )
 end
 
 function Battle:confirmMove(activeCharacter)
