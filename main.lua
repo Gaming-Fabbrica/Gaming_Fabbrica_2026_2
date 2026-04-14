@@ -133,159 +133,6 @@ local function advanceTurn(activeCharacter)
   Menu:reset()
 end
 
-local function getAnimationRenderState(character)
-  if not battle then
-    return nil
-  end
-
-  local animation = battle:getAnimationState(character)
-  if not animation or not animation.path then
-    return nil
-  end
-
-  local fromNode = animation.path[animation.step]
-  local toNode = animation.path[animation.step + 1]
-  if not fromNode or not toNode then
-    return nil
-  end
-
-  local ratio = math.min(1, animation.timer / battle.moveStepDuration)
-  local fromX, fromY = gridToScreen(fromNode.column, fromNode.row)
-  local toX, toY = gridToScreen(toNode.column, toNode.row)
-  local x = fromX + (toX - fromX) * ratio
-  local y = fromY + (toY - fromY) * ratio
-  local jump = math.sin(math.pi * ratio) * battle.jumpHeight
-  return x, y, jump
-end
-
-local function getAttackAnimationRenderState(character)
-  if not battle then
-    return nil
-  end
-
-  local animation = battle:getAttackAnimation()
-  if not animation then
-    return nil
-  end
-
-  local baseX, baseY = gridToScreen(character.column, character.row)
-
-  if character == animation.attacker then
-    local targetX, targetY = gridToScreen(animation.target.column, animation.target.row)
-    local dx = targetX - baseX
-    local dy = targetY - baseY
-    local distance = math.sqrt((dx * dx) + (dy * dy))
-    if distance <= 0 then
-      return baseX, baseY, 0
-    end
-
-    local directionX = dx / distance
-    local directionY = dy / distance
-    local windupOffset = math.min(tileW * 0.18, distance * 0.18)
-    local maxOffset = math.min(tileW * 0.42, distance * 0.42)
-    local offset = 0
-    local timer = animation.timer
-
-    if timer < battle.attackWindupDuration then
-      offset = -windupOffset * (timer / battle.attackWindupDuration)
-    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration then
-      local lungeTimer = timer - battle.attackWindupDuration
-      local lungeRatio = lungeTimer / battle.attackLungeDuration
-      offset = -windupOffset + ((maxOffset + windupOffset) * lungeRatio)
-    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration then
-      offset = maxOffset
-    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration + battle.attackRetreatDuration then
-      local retreatTimer = timer - battle.attackWindupDuration - battle.attackLungeDuration - battle.attackImpactDuration
-      offset = maxOffset * (1 - (retreatTimer / battle.attackRetreatDuration))
-    end
-
-    return baseX + (directionX * offset), baseY + (directionY * offset), 0
-  end
-
-  if character == animation.target then
-    local attackerX, attackerY = gridToScreen(animation.attacker.column, animation.attacker.row)
-    local dx = baseX - attackerX
-    local dy = baseY - attackerY
-    local distance = math.sqrt((dx * dx) + (dy * dy))
-    local directionX = distance > 0 and (dx / distance) or 1
-    local directionY = distance > 0 and (dy / distance) or 0
-    local shakeTimer = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
-    local shakeDuration = battle.attackImpactDuration + battle.attackRetreatDuration
-
-    if animation.applied and shakeTimer >= 0 and shakeTimer <= shakeDuration then
-      local intensity = 16 * (1 - (shakeTimer / shakeDuration))
-      local oscillation = math.sin(shakeTimer * 75)
-      return baseX + (directionX * intensity * oscillation), baseY + (directionY * intensity * oscillation * 0.6), 0
-    end
-
-    return baseX, baseY, 0
-  end
-
-  return nil
-end
-
-local function getDeathAnimationRenderState(character)
-  if not battle then
-    return nil
-  end
-
-  local animation = battle:getDeathAnimation()
-  if not animation or character ~= animation.character then
-    return nil
-  end
-
-  local baseX, baseY = gridToScreen(character.column, character.row)
-  local ratio = math.min(1, animation.timer / battle.deathDuration)
-  local rise = 72 * ratio
-  local flipScaleX = math.cos(ratio * math.pi * 3)
-  local alpha = 1 - ratio
-
-  return baseX, baseY - rise, 0, flipScaleX, 1, alpha
-end
-
-local function getIdleBreathingState(character)
-  if not battle then
-    return 1, 1
-  end
-
-  local attackAnimation = battle:getAttackAnimation()
-  local deathAnimation = battle:getDeathAnimation()
-  if battle:getAnimationState(character) then
-    return 1, 1
-  end
-  if attackAnimation and (attackAnimation.attacker == character or attackAnimation.target == character) then
-    return 1, 1
-  end
-  if deathAnimation and deathAnimation.character == character then
-    return 1, 1
-  end
-
-  local phase = (love.timer.getTime() * 2.2) + (character.column * 0.31) + (character.row * 0.17)
-  local breath = math.sin(phase)
-  local scaleXFactor = 1 - (0.018 * breath)
-  local scaleYFactor = 1 + (0.03 * breath)
-  return scaleXFactor, scaleYFactor
-end
-
-local function getCharacterRenderState(character)
-  local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = getDeathAnimationRenderState(character)
-  if x then
-    return x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha
-  end
-
-  x, y, jumpOffset = getAnimationRenderState(character)
-  if x then
-    return x, y, jumpOffset, 1, 1, 1
-  end
-
-  x, y, jumpOffset = getAttackAnimationRenderState(character)
-  if x then
-    return x, y, jumpOffset or 0, 1, 1, 1
-  end
-
-  return nil
-end
-
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
@@ -344,29 +191,26 @@ function love.update(dt)
 
     local tileX, tileY = gridToScreen(focusColumn, focusRow)
     if gameMode == "animating" then
-      local animatedX, animatedY = getAnimationRenderState(active)
+      local animatedX, animatedY = Character.getMoveRenderState(active, battle, gridToScreen)
       if animatedX then
         tileX = animatedX
         tileY = animatedY
       end
     elseif battle and battle:getAttackAnimation() then
       local attackAnimation = battle:getAttackAnimation()
-      local attackerX, attackerY = getAttackAnimationRenderState(attackAnimation.attacker)
-      local targetX, targetY = getAttackAnimationRenderState(attackAnimation.target)
+      local attackerX, attackerY = Character.getAttackRenderState(attackAnimation.attacker, battle, gridToScreen, tileW)
+      local targetX, targetY = Character.getAttackRenderState(attackAnimation.target, battle, gridToScreen, tileW)
       if attackerX and targetX then
         tileX = (attackerX + targetX) * 0.5
         tileY = (attackerY + targetY) * 0.5
       end
     elseif battle and battle:getDeathAnimation() then
       local deathAnimation = battle:getDeathAnimation()
-      local deathX, deathY = getDeathAnimationRenderState(deathAnimation.character)
+      local deathX, deathY = Character.getDeathRenderState(deathAnimation.character, battle, gridToScreen)
       if deathX then
         tileX = deathX
         tileY = deathY
       end
-    end
-    if not tileX then
-      tileX, tileY = getAnimationRenderState(active)
     end
 
     local focusX = tileX + (tileW * 0.5)
@@ -432,90 +276,23 @@ function love.draw()
     love.graphics.draw(cursor, cursorX, cursorY)
   end
 
-  local characterDrawList = {}
-  for _, character in ipairs(characters) do
-    local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = getCharacterRenderState(character)
-    if not x then
-      x, y = gridToScreen(character.column, character.row)
-      jumpOffset = 0
-      scaleXFactor, scaleYFactor = getIdleBreathingState(character)
-      alpha = 1
-    end
-    characterDrawList[#characterDrawList + 1] = {
-      character = character,
-      x = x,
-      y = y,
-      jumpOffset = jumpOffset or 0,
-      scaleXFactor = scaleXFactor or 1,
-      scaleYFactor = scaleYFactor or 1,
-      alpha = alpha or 1,
-      sortY = y + (tileH * 0.5),
-      sortX = x + (tileW * 0.5),
-    }
-  end
-
-  table.sort(characterDrawList, function(a, b)
-    if a.sortY == b.sortY then
-      return a.sortX < b.sortX
-    end
-    return a.sortY < b.sortY
-  end)
-
-  for _, entry in ipairs(characterDrawList) do
-    local character = entry.character
-    local spriteW = character.sprite:getWidth()
-    local spriteH = character.sprite:getHeight()
-    local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
-    local scaleX = scale * entry.scaleXFactor
-    local scaleY = scale * entry.scaleYFactor
-    local directionScale = character.direction == "left" and -scaleX or scaleX
-    local tileCenterX = entry.x + (tileW * 0.5)
-    local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
-    love.graphics.setColor(1, 1, 1, entry.alpha)
-    love.graphics.draw(
-      character.sprite,
-      tileCenterX + characterRightOffsetX,
-      tileCenterY + characterFootOffsetY,
-      0,
-      directionScale,
-      scaleY,
-      spriteW * 0.5,
-      spriteH
-    )
-    love.graphics.setColor(1, 1, 1, 1)
-  end
-
-  if battle and battle:getAttackAnimation() then
-    local animation = battle:getAttackAnimation()
-    if animation.applied then
-      local textX, textY = getAttackAnimationRenderState(animation.target)
-      if not textX then
-        textX, textY = gridToScreen(animation.target.column, animation.target.row)
-      end
-      local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
-      local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
-      local rise = 72 * math.min(1, elapsed / floatDuration)
-      local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
-      local alpha = 1
-      if elapsed > fadeStart then
-        alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
-      end
-
-      local damageText = "-" .. animation.damage
-      local damageScale = 3
-      local damageX = textX + (tileW * 0.5) - 30
-      local damageY = textY - 52 - rise
-
-      love.graphics.setColor(0, 0, 0, alpha)
-      love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
-      love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
-      love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
-      love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
-      love.graphics.setColor(1, 0.1, 0.1, alpha)
-      love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
-      love.graphics.setColor(1, 1, 1, 1)
-    end
-  end
+  local characterDrawList = Character.buildDrawList(
+    characters,
+    battle,
+    gridToScreen,
+    tileW,
+    tileH,
+    love.timer.getTime()
+  )
+  Character.drawDrawList(
+    characterDrawList,
+    tileW,
+    tileH,
+    characterScale,
+    characterRightOffsetX,
+    characterFootOffsetY
+  )
+  Character.drawAttackDamageText(battle, gridToScreen, tileW)
 
   if camera then
     love.graphics.pop()
