@@ -11,6 +11,8 @@ function Battle.new(cols, rows, map)
     characters = {},
     moveRange = {},
     moveTarget = { column = 1, row = 1 },
+    attackRange = {},
+    attackTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
     moveStepDuration = 0.6,
@@ -39,6 +41,7 @@ function Battle:startTurn()
   self.turnPhase = "move"
   self.mode = "menu"
   self.moveRange = {}
+  self.attackRange = {}
   self.moveAnimation = nil
   self.movingCharacter = nil
 end
@@ -47,6 +50,7 @@ function Battle:startActionPhase()
   self.turnPhase = "action"
   self.mode = "menu"
   self.moveRange = {}
+  self.attackRange = {}
   self.movingCharacter = nil
 end
 
@@ -59,6 +63,9 @@ function Battle:setMode(mode)
   if mode ~= "animating" then
     self.moveAnimation = nil
   end
+  if mode ~= "attack" then
+    self.attackRange = {}
+  end
 end
 
 function Battle:isCharacterAt(column, row, ignoreCharacter)
@@ -68,6 +75,15 @@ function Battle:isCharacterAt(column, row, ignoreCharacter)
     end
   end
   return false
+end
+
+function Battle:getCharacterAt(column, row, ignoreCharacter)
+  for _, character in ipairs(self.characters) do
+    if character ~= ignoreCharacter and character.column == column and character.row == row then
+      return character
+    end
+  end
+  return nil
 end
 
 function Battle:isPassable(column, row, ignoreCharacter)
@@ -81,8 +97,16 @@ function Battle:isMoveMode()
   return self.mode == "move"
 end
 
+function Battle:isAttackMode()
+  return self.mode == "attack"
+end
+
 function Battle:getMoveRange()
   return self.moveRange
+end
+
+function Battle:getAttackRange()
+  return self.attackRange
 end
 
 function Battle:getMoveAnimation()
@@ -108,9 +132,15 @@ function Battle:isReachable(column, row)
   return self.moveRange[column .. "," .. row]
 end
 
+function Battle:isAttackable(column, row)
+  return self.attackRange[column .. "," .. row]
+end
+
 function Battle:getCursorColumnRow(activeCharacter)
   if self.mode == "move" then
     return self.moveTarget.column, self.moveTarget.row
+  elseif self.mode == "attack" then
+    return self.attackTarget.column, self.attackTarget.row
   end
   return activeCharacter.column, activeCharacter.row
 end
@@ -271,6 +301,49 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
   return path
 end
 
+function Battle:updateCharacterDirection(character, fromColumn, toColumn)
+  if toColumn < fromColumn then
+    character:setDirection("left")
+  elseif toColumn > fromColumn then
+    character:setDirection("right")
+  end
+end
+
+function Battle:getAttackableTiles(activeCharacter)
+  local attackable = {}
+
+  for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
+    local column = neighbor[1]
+    local row = neighbor[2]
+    if self:getCharacterAt(column, row, activeCharacter) then
+      attackable[column .. "," .. row] = true
+    end
+  end
+
+  return attackable
+end
+
+function Battle:startAttackSelection(activeCharacter)
+  if self.turnPhase ~= "action" then
+    return false
+  end
+
+  self.attackRange = self:getAttackableTiles(activeCharacter)
+
+  for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
+    local column = neighbor[1]
+    local row = neighbor[2]
+    if self:isAttackable(column, row) then
+      self.attackTarget.column = column
+      self.attackTarget.row = row
+      self.mode = "attack"
+      return true
+    end
+  end
+
+  return false
+end
+
 function Battle:startMoveSelection(activeCharacter)
   if self.turnPhase ~= "move" then
     return
@@ -316,6 +389,40 @@ function Battle:moveTargetByKey(key)
   self.moveTarget.row = nextRow
 end
 
+function Battle:moveAttackTargetByKey(activeCharacter, key)
+  local nextColumn = self.attackTarget.column
+  local nextRow = self.attackTarget.row
+  local neighbors = self:getHexNeighbors(activeCharacter.column, activeCharacter.row)
+  local candidates = {}
+
+  if key == "left" then
+    candidates[1] = neighbors[2]
+  elseif key == "right" then
+    candidates[1] = neighbors[1]
+  elseif key == "up" then
+    candidates[1] = neighbors[3]
+    candidates[2] = neighbors[5]
+  elseif key == "down" then
+    candidates[1] = neighbors[4]
+    candidates[2] = neighbors[6]
+  end
+
+  for _, candidate in ipairs(candidates) do
+    if candidate then
+      local column = candidate[1]
+      local row = candidate[2]
+      if self:isAttackable(column, row) then
+        nextColumn = column
+        nextRow = row
+        break
+      end
+    end
+  end
+
+  self.attackTarget.column = nextColumn
+  self.attackTarget.row = nextRow
+end
+
 function Battle:confirmMove(activeCharacter)
   if self:isReachable(self.moveTarget.column, self.moveTarget.row) then
     self.movingCharacter = activeCharacter
@@ -326,6 +433,7 @@ function Battle:confirmMove(activeCharacter)
       self.moveTarget.row
     )
     if path and #path > 1 then
+      self:updateCharacterDirection(activeCharacter, path[1].column, path[2].column)
       self.moveRange = {}
       self.mode = "animating"
       self.moveAnimation = {
@@ -340,9 +448,48 @@ function Battle:confirmMove(activeCharacter)
   return false
 end
 
+function Battle:calculateDamage(attacker, defender)
+  return math.max(1, attacker.atk - defender.def)
+end
+
+function Battle:defeatCharacter(target)
+  for index, character in ipairs(self.characters) do
+    if character == target then
+      table.remove(self.characters, index)
+      return
+    end
+  end
+end
+
+function Battle:confirmAttack(activeCharacter)
+  if not self:isAttackable(self.attackTarget.column, self.attackTarget.row) then
+    return false
+  end
+
+  local target = self:getCharacterAt(self.attackTarget.column, self.attackTarget.row, activeCharacter)
+  if not target then
+    return false
+  end
+
+  self:updateCharacterDirection(activeCharacter, activeCharacter.column, target.column)
+  target.hp = target.hp - self:calculateDamage(activeCharacter, target)
+  if target.hp <= 0 then
+    self:defeatCharacter(target)
+  end
+
+  self.attackRange = {}
+  self.mode = "menu"
+  return true
+end
+
 function Battle:cancelMoveMode()
   self.mode = "menu"
   self.moveRange = {}
+end
+
+function Battle:cancelAttackMode()
+  self.mode = "menu"
+  self.attackRange = {}
 end
 
 function Battle:update(dt)
@@ -363,6 +510,12 @@ function Battle:update(dt)
       self.movingCharacter = nil
       self:startActionPhase()
       return
+    end
+
+    local fromNode = animation.path[animation.step]
+    local toNode = animation.path[animation.step + 1]
+    if fromNode and toNode then
+      self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
     end
   end
 end

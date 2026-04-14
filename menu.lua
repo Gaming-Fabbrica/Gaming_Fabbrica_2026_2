@@ -5,6 +5,12 @@ Menu.entriesByPhase = {
   move = { "Move", "Skip" },
   action = { "Attack", "Skill", "Item" },
 }
+Menu.disabledEntriesByPhase = {
+  action = {
+    Skill = true,
+    Item = true,
+  },
+}
 Menu.selectedIndex = 1
 Menu.scale = 2
 
@@ -25,14 +31,38 @@ end
 
 function Menu:setIndex(index)
   local entries = self:getEntries()
-  if index >= 1 and index <= #entries then
+  if index >= 1 and index <= #entries and self:isEntryEnabled(entries[index]) then
     self.selectedIndex = index
   end
 end
 
-function Menu:moveSelection(delta)
+function Menu:isEntryEnabled(entry)
+  local disabledEntries = self.disabledEntriesByPhase[self.phase]
+  return not (disabledEntries and disabledEntries[entry])
+end
+
+function Menu:findSelectableIndex(startIndex, delta)
   local entries = self:getEntries()
-  self.selectedIndex = math.max(1, math.min(#entries, self.selectedIndex + delta))
+  if #entries == 0 then
+    return startIndex
+  end
+
+  local index = startIndex
+  for _ = 1, #entries do
+    index = math.max(1, math.min(#entries, index + delta))
+    if self:isEntryEnabled(entries[index]) then
+      return index
+    end
+    if index == 1 or index == #entries then
+      break
+    end
+  end
+
+  return self.selectedIndex
+end
+
+function Menu:moveSelection(delta)
+  self.selectedIndex = self:findSelectableIndex(self.selectedIndex, delta)
 end
 
 function Menu:next()
@@ -78,10 +108,18 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   for i, entry in ipairs(entries) do
     local y = screenY + padding + (i - 1) * rowHeight
     if i == self.selectedIndex then
-      love.graphics.setColor(1, 1, 0, 1)
+      if self:isEntryEnabled(entry) then
+        love.graphics.setColor(1, 1, 0, 1)
+      else
+        love.graphics.setColor(0.5, 0.5, 0.5, 1)
+      end
       love.graphics.print("> " .. entry, screenX + 4, y, 0, self.scale, self.scale)
     else
-      love.graphics.setColor(1, 1, 1, 1)
+      if self:isEntryEnabled(entry) then
+        love.graphics.setColor(1, 1, 1, 1)
+      else
+        love.graphics.setColor(0.5, 0.5, 0.5, 1)
+      end
       love.graphics.print("  " .. entry, screenX + 4, y, 0, self.scale, self.scale)
     end
   end

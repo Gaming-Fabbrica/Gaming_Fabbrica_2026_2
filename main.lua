@@ -13,6 +13,7 @@ local tileSpacingX = 0
 local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
+local attackTile = nil
 local stoneTile = nil
 
 local characterScale = 1.0
@@ -54,6 +55,36 @@ local function getActiveCharacter()
   return characters[currentTurn]
 end
 
+local function advanceTurn(activeCharacter)
+  if #characters == 0 then
+    currentTurn = 1
+    if battle then
+      battle:startTurn()
+    end
+    Menu:reset()
+    return
+  end
+
+  local activeIndex = nil
+  for index, character in ipairs(characters) do
+    if character == activeCharacter then
+      activeIndex = index
+      break
+    end
+  end
+
+  if activeIndex then
+    currentTurn = (activeIndex % #characters) + 1
+  else
+    currentTurn = 1
+  end
+
+  if battle then
+    battle:startTurn()
+  end
+  Menu:reset()
+end
+
 local function getAnimationRenderState(character)
   if not battle then
     return nil
@@ -87,6 +118,7 @@ function love.load()
   stoneTile = love.graphics.newImage("assets/sprites/stone.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
+  attackTile = love.graphics.newImage("assets/sprites/attack.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
@@ -126,7 +158,7 @@ function love.update(dt)
     local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
     local focusRow = active.row
-    if gameMode == "move" then
+    if gameMode == "move" or gameMode == "attack" then
       focusColumn, focusRow = battle:getCursorColumnRow(active)
     end
 
@@ -182,6 +214,11 @@ function love.draw()
           love.graphics.setColor(1, 1, 1, glow)
           love.graphics.draw(moveTile, x, y)
           love.graphics.setColor(1, 1, 1, 1)
+        elseif active and battle and battle:isAttackMode() and battle:isAttackable(c, r) then
+          local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+          love.graphics.setColor(1, 1, 1, glow)
+          love.graphics.draw(attackTile, x, y)
+          love.graphics.setColor(1, 1, 1, 1)
         end
       else
         love.graphics.draw(stoneTile, x, y)
@@ -191,7 +228,7 @@ function love.draw()
 
   if active and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
-    if battle and battle:isMoveMode() then
+    if battle and (battle:isMoveMode() or battle:isAttackMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
       cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
@@ -290,6 +327,21 @@ function love.keypressed(key)
       end
       Menu:reset()
     end
+  elseif gameMode == "attack" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      if battle and active then
+        battle:moveAttackTargetByKey(active, key)
+      end
+    elseif key == "return" or key == "kpenter" or key == "enter" then
+      if battle and active and battle:confirmAttack(active) then
+        advanceTurn(active)
+      end
+    elseif key == "tab" then
+      if battle then
+        battle:cancelAttackMode()
+      end
+      Menu:reset()
+    end
   elseif key == "return" or key == "kpenter" or key == "enter" then
     if active then
       local selectedAction = Menu:selectedAction()
@@ -300,10 +352,10 @@ function love.keypressed(key)
           battle:startActionPhase()
         end
       elseif battle and battle:getTurnPhase() == "action" then
-        if selectedAction == "Attack" or selectedAction == "Skill" or selectedAction == "Item" then
-          currentTurn = currentTurn % #characters + 1
-          battle:startTurn()
-          Menu:reset()
+        if selectedAction == "Attack" then
+          if not battle:startAttackSelection(active) then
+            advanceTurn(active)
+          end
         end
       end
     end
