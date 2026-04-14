@@ -1,5 +1,6 @@
 local Character = require("character")
 local Camera = require("camera")
+local Menu = require("menu")
 
 local cols = 10
 local rows = 10
@@ -22,9 +23,6 @@ local moveTarget = { column = 1, row = 1 }
 local map = {}
 local characters = {}
 local currentTurn = 1
-local actionMenu = { "Move", "Attack", "Skill", "Item" }
-local selectedActionIndex = 1
-local actionMenuScale = 2
 
 local function loadSprites()
   return {
@@ -115,10 +113,6 @@ local function getReachableTiles(startColumn, startRow, maxMoves)
   end
 
   return reachable
-end
-
-local function isMoveActionSelected()
-  return actionMenu[selectedActionIndex] == "Move"
 end
 
 local function isReachableForMove(column, row)
@@ -296,39 +290,15 @@ function love.draw()
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
-    local screenX, screenY = worldX, worldY
-    if camera then
-      screenX, screenY = camera:worldToScreen(worldX, worldY)
-    end
-
-    local menuX = screenX + tileW * 0.6
-    local menuY = screenY - (4 * 18) * 0.5
-    local menuWidth = 90 * actionMenuScale
-    local rowHeight = 18 * actionMenuScale
-    local padding = 6 * actionMenuScale
-    local menuHeight = (#actionMenu * rowHeight) + (padding * 2)
-
-    love.graphics.setColor(0, 0, 0, 0.7)
-    love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight, 4, 4)
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight, 4, 4)
-
-    for i, action in ipairs(actionMenu) do
-      local y = menuY + padding + (i - 1) * rowHeight
-      if i == selectedActionIndex then
-        love.graphics.setColor(1, 1, 0, 1)
-        love.graphics.print("> " .. action, menuX + 4, y, 0, actionMenuScale, actionMenuScale)
-      else
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.print("  " .. action, menuX + 4, y, 0, actionMenuScale, actionMenuScale)
-      end
-    end
+    Menu:draw(worldX, worldY, tileW, camera and function(x, y)
+      return camera:worldToScreen(x, y)
+    end)
   end
 
   love.graphics.setColor(0, 0, 0)
   if active then
     love.graphics.print(
-      string.format("Turn %d: %s  HP:%d  MOV:%d  Action: %s", currentTurn, active.name, active.hp, active.mov, actionMenu[selectedActionIndex]),
+      string.format("Turn %d: %s  HP:%d  MOV:%d  Action: %s", currentTurn, active.name, active.hp, active.mov, Menu:selectedAction()),
       10,
       10
     )
@@ -348,37 +318,34 @@ function love.keypressed(key)
     elseif key == "return" or key == "kpenter" then
       if active then
         confirmMove(active)
-        selectedActionIndex = 1
+        Menu:reset()
       end
     elseif key == "tab" then
       -- cancel move mode and keep current turn
       gameMode = "menu"
-      selectedActionIndex = 1
+      Menu:reset()
     end
   elseif key == "return" or key == "kpenter" then
     if active then
-      if isMoveActionSelected() then
+      if Menu:isMoveSelected() then
         startMoveSelection(active)
-      else
-        -- action selected (placeholder for future action handling)
-        selectedActionIndex = selectedActionIndex
       end
     end
   elseif key == "up" then
-    selectedActionIndex = math.max(1, selectedActionIndex - 1)
+    Menu:prev()
   elseif key == "down" then
-    selectedActionIndex = math.min(#actionMenu, selectedActionIndex + 1)
+    Menu:next()
   elseif key == "tab" then
     currentTurn = currentTurn % #characters + 1
-    selectedActionIndex = 1
+    Menu:reset()
     gameMode = "menu"
   elseif key == "1" then
-    selectedActionIndex = 1
+    Menu:setIndex(1)
   elseif key == "2" then
-    selectedActionIndex = 2
+    Menu:setIndex(2)
   elseif key == "3" then
-    selectedActionIndex = 3
+    Menu:setIndex(3)
   elseif key == "4" then
-    selectedActionIndex = 4
+    Menu:setIndex(4)
   end
 end
