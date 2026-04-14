@@ -8,6 +8,8 @@ local tileW = 0
 local tileH = 0
 local tileSpacingX = 0
 local tileSpacingY = 0
+local cursor = nil
+
 local characterScale = 1.0
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
@@ -37,6 +39,7 @@ function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
 
   tile = love.graphics.newImage("assets/sprites/hexa.png")
+  cursor = love.graphics.newImage("assets/sprites/cursor.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
@@ -65,6 +68,12 @@ function love.draw()
     end
   end
 
+  local active = characters[currentTurn]
+  if active then
+    local cursorX, cursorY = gridToScreen(active.column, active.row)
+    love.graphics.draw(cursor, cursorX, cursorY)
+  end
+
   for _, character in ipairs(characters) do
     local x, y = gridToScreen(character.column, character.row)
     local spriteW = character.sprite:getWidth()
@@ -85,7 +94,6 @@ function love.draw()
     )
   end
 
-  local active = characters[currentTurn]
   love.graphics.setColor(0, 0, 0)
   love.graphics.print(
     string.format("Turn %d: %s  HP:%d  MOV:%d", currentTurn, active.name, active.hp, active.mov),
