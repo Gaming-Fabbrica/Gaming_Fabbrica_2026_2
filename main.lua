@@ -1,4 +1,5 @@
 local Character = require("character")
+local Camera = require("camera")
 
 local cols = 10
 local rows = 10
@@ -13,6 +14,7 @@ local cursor = nil
 local characterScale = 1.0
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
+local camera = nil
 
 local map = {}
 local characters = {}
@@ -55,10 +57,38 @@ function love.load()
   characters = loadSprites()
   local mapWidth = math.floor((cols - 1) * tileSpacingX + tileW + 1)
   local mapHeight = math.floor(rows * tileSpacingY + tileH * 0.5 + 1)
-  love.window.setMode(mapWidth, mapHeight)
+  local screenW, screenH = love.window.getDesktopDimensions(1)
+  love.window.setMode(screenW, screenH, {
+    fullscreen = true,
+    fullscreentype = "desktop",
+  })
+  camera = Camera.new(screenW, screenH)
+  camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
+end
+
+function love.update()
+  local active = characters[currentTurn]
+  if active then
+    local tileX, tileY = gridToScreen(active.column, active.row)
+    local focusX = tileX + (tileW * 0.5)
+    local focusY = tileY + (tileH * 0.5)
+    camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
+    camera:follow(focusX, focusY)
+  end
+end
+
+function love.resize(width, height)
+  if camera then
+    camera:setViewSize(width, height)
+  end
 end
 
 function love.draw()
+  if camera then
+    love.graphics.push()
+    camera:apply()
+  end
+
   for c = 1, cols do
     for r = 1, rows do
       if map[c][r] then
@@ -92,6 +122,10 @@ function love.draw()
       spriteW * 0.5,
       spriteH
     )
+  end
+
+  if camera then
+    love.graphics.pop()
   end
 
   love.graphics.setColor(0, 0, 0)
