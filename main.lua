@@ -133,16 +133,21 @@ local function getAttackAnimationRenderState(character)
 
     local directionX = dx / distance
     local directionY = dy / distance
-    local maxOffset = math.min(tileW * 0.35, distance * 0.35)
+    local windupOffset = math.min(tileW * 0.18, distance * 0.18)
+    local maxOffset = math.min(tileW * 0.42, distance * 0.42)
     local offset = 0
     local timer = animation.timer
 
-    if timer < battle.attackLungeDuration then
-      offset = maxOffset * (timer / battle.attackLungeDuration)
-    elseif timer < battle.attackLungeDuration + battle.attackImpactDuration then
+    if timer < battle.attackWindupDuration then
+      offset = -windupOffset * (timer / battle.attackWindupDuration)
+    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration then
+      local lungeTimer = timer - battle.attackWindupDuration
+      local lungeRatio = lungeTimer / battle.attackLungeDuration
+      offset = -windupOffset + ((maxOffset + windupOffset) * lungeRatio)
+    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration then
       offset = maxOffset
-    elseif timer < battle.attackLungeDuration + battle.attackImpactDuration + battle.attackRetreatDuration then
-      local retreatTimer = timer - battle.attackLungeDuration - battle.attackImpactDuration
+    elseif timer < battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration + battle.attackRetreatDuration then
+      local retreatTimer = timer - battle.attackWindupDuration - battle.attackLungeDuration - battle.attackImpactDuration
       offset = maxOffset * (1 - (retreatTimer / battle.attackRetreatDuration))
     end
 
@@ -156,13 +161,13 @@ local function getAttackAnimationRenderState(character)
     local distance = math.sqrt((dx * dx) + (dy * dy))
     local directionX = distance > 0 and (dx / distance) or 1
     local directionY = distance > 0 and (dy / distance) or 0
-    local shakeTimer = animation.timer - battle.attackLungeDuration
-    local shakeDuration = battle.attackImpactDuration + (battle.attackRetreatDuration * 0.5)
+    local shakeTimer = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+    local shakeDuration = battle.attackImpactDuration + battle.attackRetreatDuration
 
     if animation.applied and shakeTimer >= 0 and shakeTimer <= shakeDuration then
-      local intensity = 8 * (1 - (shakeTimer / shakeDuration))
-      local oscillation = math.sin(shakeTimer * 50)
-      return baseX + (directionX * intensity * oscillation), baseY + (directionY * intensity * oscillation * 0.35), 0
+      local intensity = 16 * (1 - (shakeTimer / shakeDuration))
+      local oscillation = math.sin(shakeTimer * 75)
+      return baseX + (directionX * intensity * oscillation), baseY + (directionY * intensity * oscillation * 0.6), 0
     end
 
     return baseX, baseY, 0
@@ -355,18 +360,27 @@ function love.draw()
       if not textX then
         textX, textY = gridToScreen(animation.target.column, animation.target.row)
       end
-      local elapsed = animation.timer - battle.attackLungeDuration
-      local rise = math.min(32, elapsed * 40)
+      local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+      local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
+      local rise = 72 * math.min(1, elapsed / floatDuration)
       local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
       local alpha = 1
       if elapsed > fadeStart then
         alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
       end
 
+      local damageText = "-" .. animation.damage
+      local damageScale = 3
+      local damageX = textX + (tileW * 0.5) - 30
+      local damageY = textY - 52 - rise
+
       love.graphics.setColor(0, 0, 0, alpha)
-      love.graphics.print("-" .. animation.damage, textX + (tileW * 0.5) - 18, textY - 18 - rise, 0, 2, 2)
+      love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
       love.graphics.setColor(1, 0.1, 0.1, alpha)
-      love.graphics.print("-" .. animation.damage, textX + (tileW * 0.5) - 20, textY - 20 - rise, 0, 2, 2)
+      love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
       love.graphics.setColor(1, 1, 1, 1)
     end
   end

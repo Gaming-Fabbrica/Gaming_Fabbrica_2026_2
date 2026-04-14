@@ -19,6 +19,7 @@ function Battle.new(cols, rows, map)
     completedActionCharacter = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
+    attackWindupDuration = 0.12,
     attackLungeDuration = 0.14,
     attackImpactDuration = 0.12,
     attackRetreatDuration = 0.14,
@@ -546,7 +547,7 @@ function Battle:update(dt)
     local animation = self.attackAnimation
     animation.timer = animation.timer + dt
 
-    if not animation.applied and animation.timer >= self.attackLungeDuration then
+    if not animation.applied and animation.timer >= self.attackWindupDuration + self.attackLungeDuration then
       animation.applied = true
       animation.target.hp = animation.target.hp - animation.damage
       if animation.target.hp <= 0 then
@@ -556,7 +557,8 @@ function Battle:update(dt)
     end
 
     local totalDuration =
-      self.attackLungeDuration
+      self.attackWindupDuration
+      + self.attackLungeDuration
       + self.attackImpactDuration
       + self.attackRetreatDuration
       + self.attackHoldDuration
