@@ -338,7 +338,33 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
   love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Character.drawHoverHp(character, drawList, heartSprite, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
+function Character.getDisplayedHp(character, battle)
+  local displayedHp = math.max(0, character.hp)
+  local maxHp = character.maxHp or displayedHp
+
+  if not battle then
+    return displayedHp, maxHp
+  end
+
+  local animation = battle:getAttackAnimation()
+  if not animation or animation.target ~= character then
+    return displayedHp, maxHp
+  end
+
+  local startHp = animation.startHp or displayedHp
+  if not animation.applied then
+    return startHp, maxHp
+  end
+
+  local postImpactElapsed = math.max(0, animation.timer - battle.attackWindupDuration - battle.attackLungeDuration)
+  local lostHp = math.max(0, math.min(animation.damage, startHp))
+  local heartStepDuration = 0.11
+  local heartsGreyed = math.min(lostHp, math.floor(postImpactElapsed / heartStepDuration) + 1)
+  displayedHp = math.max(character.hp, startHp - heartsGreyed)
+  return displayedHp, maxHp
+end
+
+function Character.drawHoverHp(character, drawList, heartSprite, tileW, tileH, characterScale, rightOffsetX, footOffsetY, battle)
   if not character or not drawList or not heartSprite then
     return
   end
@@ -355,6 +381,7 @@ function Character.drawHoverHp(character, drawList, heartSprite, tileW, tileH, c
     return
   end
 
+  local displayedHp, maxHp = Character.getDisplayedHp(character, battle)
   local spriteW = character.sprite:getWidth()
   local spriteH = character.sprite:getHeight()
   local baseScale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
@@ -368,8 +395,7 @@ function Character.drawHoverHp(character, drawList, heartSprite, tileW, tileH, c
   local heartSize = math.max(10, math.floor(tileW * 0.16))
   local heartScale = heartSize / heartSprite:getWidth()
   local heartSpacing = math.floor(heartSize * 0.85)
-  local displayedHp = math.max(0, character.hp)
-  local totalHearts = math.max(1, character.maxHp or displayedHp)
+  local totalHearts = math.max(1, maxHp or displayedHp)
   local contentWidth = heartSize + ((totalHearts - 1) * heartSpacing)
   local paddingX = 10
   local paddingY = 7

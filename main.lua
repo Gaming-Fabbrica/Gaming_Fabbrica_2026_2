@@ -240,7 +240,10 @@ end
 function love.draw()
   local active = getActiveCharacter()
   local hoveredCharacter = nil
-  if active and not (battle and battle:isAnimating()) then
+  local attackAnimation = battle and battle:getAttackAnimation() or nil
+  if attackAnimation then
+    hoveredCharacter = attackAnimation.target
+  elseif active and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
     if battle and (battle:isMoveMode() or battle:isAttackMode()) then
@@ -311,7 +314,8 @@ function love.draw()
     tileH,
     characterScale,
     characterRightOffsetX,
-    characterFootOffsetY
+    characterFootOffsetY,
+    battle
   )
   Character.drawAttackDamageText(battle, gridToScreen, tileW)
 

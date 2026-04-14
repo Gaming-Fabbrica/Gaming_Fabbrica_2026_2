@@ -609,6 +609,7 @@ function Battle:confirmAttack(activeCharacter)
   self.attackAnimation = {
     attacker = activeCharacter,
     target = target,
+    startHp = target.hp,
     damage = self:calculateDamage(activeCharacter, target),
     timer = 0,
     applied = false,
