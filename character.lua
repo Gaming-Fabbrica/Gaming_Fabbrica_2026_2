@@ -89,7 +89,11 @@ function Character.getMoveRenderState(character, battle, gridToScreen)
   local x = fromX + (toX - fromX) * ratio
   local y = fromY + (toY - fromY) * ratio
   local jump = math.sin(math.pi * ratio) * battle.jumpHeight
-  return x, y, jump
+  local stretch = math.sin(math.pi * ratio)
+  local squash = math.abs(math.cos(math.pi * ratio))
+  local scaleXFactor = 1 + (0.1 * squash) - (0.06 * stretch)
+  local scaleYFactor = 1 - (0.08 * squash) + (0.12 * stretch)
+  return x, y, jump, scaleXFactor, scaleYFactor
 end
 
 function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
@@ -184,9 +188,9 @@ function Character.getAnimatedRenderState(character, battle, gridToScreen, tileW
     return x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha
   end
 
-  x, y, jumpOffset = Character.getMoveRenderState(character, battle, gridToScreen)
+  x, y, jumpOffset, scaleXFactor, scaleYFactor = Character.getMoveRenderState(character, battle, gridToScreen)
   if x then
-    return x, y, jumpOffset, 1, 1, 1
+    return x, y, jumpOffset, scaleXFactor or 1, scaleYFactor or 1, 1
   end
 
   x, y, jumpOffset = Character.getAttackRenderState(character, battle, gridToScreen, tileW)
