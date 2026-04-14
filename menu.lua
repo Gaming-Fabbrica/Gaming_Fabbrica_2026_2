@@ -31,7 +31,9 @@ function Menu:selectedAction()
 end
 
 function Menu:isMoveSelected()
-  return self:selectedAction() == "Move"
+  local action = self:selectedAction()
+  return self.selectedIndex == 1
+    or (type(action) == "string" and action:lower() == "move")
 end
 
 function Menu:draw(worldX, worldY, tileW, worldToScreen)

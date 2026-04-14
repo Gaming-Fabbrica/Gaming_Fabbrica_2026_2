@@ -99,6 +99,13 @@ function Battle:isInMap(column, row)
   return column >= 1 and column <= self.cols and row >= 1 and row <= self.rows
 end
 
+function Battle:isWalkableStep(column, row, ignoreCharacter)
+  if not self:isInMap(column, row) then
+    return false
+  end
+  return self:isPassable(column, row, ignoreCharacter)
+end
+
 function Battle:getHexNeighbors(column, row)
   if column % 2 == 0 then
     return {
@@ -124,6 +131,9 @@ end
 function Battle:getReachableTiles(startColumn, startRow, maxMoves)
   local reachable = {}
   if maxMoves < 1 then
+    return reachable
+  end
+  if not self:isWalkableStep(startColumn, startRow, self.movingCharacter) then
     return reachable
   end
 
@@ -152,8 +162,7 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves)
         local nextKey = nextColumn .. "," .. nextRow
 
         if
-          self:isInMap(nextColumn, nextRow)
-          and self:isPassable(nextColumn, nextRow, self.movingCharacter)
+          self:isWalkableStep(nextColumn, nextRow, self.movingCharacter)
           and not visited[nextKey]
         then
           visited[nextKey] = distance + 1
@@ -167,6 +176,14 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves)
 end
 
 function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
+  if not self:isWalkableStep(startColumn, startRow, self.movingCharacter) then
+    return nil
+  end
+
+  if not self:isWalkableStep(targetColumn, targetRow, self.movingCharacter) then
+    return nil
+  end
+
   if startColumn == targetColumn and startRow == targetRow then
     return {
       {column = startColumn, row = startRow},
@@ -197,8 +214,7 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
       local nextKey = nextColumn .. "," .. nextRow
 
       if
-        self:isInMap(nextColumn, nextRow)
-        and self:isPassable(nextColumn, nextRow, self.movingCharacter)
+        self:isWalkableStep(nextColumn, nextRow, self.movingCharacter)
         and not visited[nextKey]
       then
         visited[nextKey] = true
@@ -236,10 +252,10 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
 end
 
 function Battle:startMoveSelection(activeCharacter)
+  self.movingCharacter = activeCharacter
   self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov)
   self.moveTarget.column = activeCharacter.column
   self.moveTarget.row = activeCharacter.row
-  self.movingCharacter = activeCharacter
   self.mode = "move"
 end
 

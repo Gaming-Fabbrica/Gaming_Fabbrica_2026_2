@@ -257,7 +257,7 @@ function love.keypressed(key)
       if battle then
         battle:moveTargetByKey(key)
       end
-    elseif key == "return" or key == "kpenter" then
+    elseif key == "return" or key == "kpenter" or key == "enter" then
       if active then
         if battle then
           battle:confirmMove(active)
@@ -271,7 +271,7 @@ function love.keypressed(key)
       end
       Menu:reset()
     end
-  elseif key == "return" or key == "kpenter" then
+  elseif key == "return" or key == "kpenter" or key == "enter" then
     if active then
       if Menu:isMoveSelected() then
         if battle then
