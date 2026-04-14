@@ -1,7 +1,7 @@
 local Character = {}
 Character.__index = Character
 
-function Character.new(name, spritePath, column, row, hp, mov)
+function Character.new(name, spritePath, column, row, hp, mov, direction)
   local instance = {
     name = name,
     spritePath = spritePath,
@@ -10,6 +10,7 @@ function Character.new(name, spritePath, column, row, hp, mov)
     mov = mov or 5,
     column = column,
     row = row,
+    direction = direction or "right",
   }
   return setmetatable(instance, Character)
 end
@@ -21,6 +22,12 @@ end
 function Character:setPosition(column, row)
   self.column = column
   self.row = row
+end
+
+function Character:setDirection(direction)
+  if direction == "left" or direction == "right" then
+    self.direction = direction
+  end
 end
 
 return Character

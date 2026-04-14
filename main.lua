@@ -10,7 +10,7 @@ local tileSpacingX = 0
 local tileSpacingY = 0
 local characterScale = 1.0
 local characterFootOffsetY = 32
-local characterRightOffsetX = 32
+local characterRightOffsetX = 0
 
 local map = {}
 local characters = {}
@@ -18,9 +18,9 @@ local currentTurn = 1
 
 local function loadSprites()
   return {
-    Character.new("tank_girl", "assets/sprites/tank_girl.png", 2, 3),
-    Character.new("tank_boy", "assets/sprites/tank_boy.png", 5, 3),
-    Character.new("archer_boy", "assets/sprites/archer_boy.png", 8, 3),
+    Character.new("tank_girl", "assets/sprites/tank_girl.png", 2, 3, 5, 5, "right"),
+    Character.new("tank_boy", "assets/sprites/tank_boy.png", 5, 3, 5, 5, "left"),
+    Character.new("archer_boy", "assets/sprites/archer_boy.png", 8, 3, 5, 5, "right"),
   }
 end
 
@@ -70,6 +70,7 @@ function love.draw()
     local spriteW = character.sprite:getWidth()
     local spriteH = character.sprite:getHeight()
     local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
+    local directionScale = character.direction == "left" and -scale or scale
     local tileCenterX = x + (tileW * 0.5)
     local tileCenterY = y + (tileH * 0.5)
     love.graphics.draw(
@@ -77,7 +78,7 @@ function love.draw()
       tileCenterX + characterRightOffsetX,
       tileCenterY + characterFootOffsetY,
       0,
-      scale,
+      directionScale,
       scale,
       spriteW * 0.5,
       spriteH
