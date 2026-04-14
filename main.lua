@@ -110,6 +110,81 @@ local function getAnimationRenderState(character)
   return x, y, jump
 end
 
+local function getAttackAnimationRenderState(character)
+  if not battle then
+    return nil
+  end
+
+  local animation = battle:getAttackAnimation()
+  if not animation then
+    return nil
+  end
+
+  local baseX, baseY = gridToScreen(character.column, character.row)
+
+  if character == animation.attacker then
+    local targetX, targetY = gridToScreen(animation.target.column, animation.target.row)
+    local dx = targetX - baseX
+    local dy = targetY - baseY
+    local distance = math.sqrt((dx * dx) + (dy * dy))
+    if distance <= 0 then
+      return baseX, baseY, 0
+    end
+
+    local directionX = dx / distance
+    local directionY = dy / distance
+    local maxOffset = math.min(tileW * 0.35, distance * 0.35)
+    local offset = 0
+    local timer = animation.timer
+
+    if timer < battle.attackLungeDuration then
+      offset = maxOffset * (timer / battle.attackLungeDuration)
+    elseif timer < battle.attackLungeDuration + battle.attackImpactDuration then
+      offset = maxOffset
+    elseif timer < battle.attackLungeDuration + battle.attackImpactDuration + battle.attackRetreatDuration then
+      local retreatTimer = timer - battle.attackLungeDuration - battle.attackImpactDuration
+      offset = maxOffset * (1 - (retreatTimer / battle.attackRetreatDuration))
+    end
+
+    return baseX + (directionX * offset), baseY + (directionY * offset), 0
+  end
+
+  if character == animation.target then
+    local attackerX, attackerY = gridToScreen(animation.attacker.column, animation.attacker.row)
+    local dx = baseX - attackerX
+    local dy = baseY - attackerY
+    local distance = math.sqrt((dx * dx) + (dy * dy))
+    local directionX = distance > 0 and (dx / distance) or 1
+    local directionY = distance > 0 and (dy / distance) or 0
+    local shakeTimer = animation.timer - battle.attackLungeDuration
+    local shakeDuration = battle.attackImpactDuration + (battle.attackRetreatDuration * 0.5)
+
+    if animation.applied and shakeTimer >= 0 and shakeTimer <= shakeDuration then
+      local intensity = 8 * (1 - (shakeTimer / shakeDuration))
+      local oscillation = math.sin(shakeTimer * 50)
+      return baseX + (directionX * intensity * oscillation), baseY + (directionY * intensity * oscillation * 0.35), 0
+    end
+
+    return baseX, baseY, 0
+  end
+
+  return nil
+end
+
+local function getCharacterRenderState(character)
+  local x, y, jumpOffset = getAnimationRenderState(character)
+  if x then
+    return x, y, jumpOffset
+  end
+
+  x, y, jumpOffset = getAttackAnimationRenderState(character)
+  if x then
+    return x, y, jumpOffset or 0
+  end
+
+  return nil
+end
+
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
@@ -150,6 +225,10 @@ end
 function love.update(dt)
   if battle then
     battle:update(dt)
+    local completedActionCharacter = battle:consumeCompletedActionCharacter()
+    if completedActionCharacter then
+      advanceTurn(completedActionCharacter)
+    end
     Menu:setPhase(battle:getTurnPhase())
   end
 
@@ -168,6 +247,14 @@ function love.update(dt)
       if animatedX then
         tileX = animatedX
         tileY = animatedY
+      end
+    elseif battle and battle:getAttackAnimation() then
+      local attackAnimation = battle:getAttackAnimation()
+      local attackerX, attackerY = getAttackAnimationRenderState(attackAnimation.attacker)
+      local targetX, targetY = getAttackAnimationRenderState(attackAnimation.target)
+      if attackerX and targetX then
+        tileX = (attackerX + targetX) * 0.5
+        tileY = (attackerY + targetY) * 0.5
       end
     end
     if not tileX then
@@ -238,7 +325,7 @@ function love.draw()
   end
 
   for _, character in ipairs(characters) do
-    local x, y, jumpOffset = getAnimationRenderState(character)
+    local x, y, jumpOffset = getCharacterRenderState(character)
     if not x then
       x, y = gridToScreen(character.column, character.row)
       jumpOffset = 0
@@ -259,6 +346,29 @@ function love.draw()
       spriteW * 0.5,
       spriteH
     )
+  end
+
+  if battle and battle:getAttackAnimation() then
+    local animation = battle:getAttackAnimation()
+    if animation.applied then
+      local textX, textY = getAttackAnimationRenderState(animation.target)
+      if not textX then
+        textX, textY = gridToScreen(animation.target.column, animation.target.row)
+      end
+      local elapsed = animation.timer - battle.attackLungeDuration
+      local rise = math.min(32, elapsed * 40)
+      local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
+      local alpha = 1
+      if elapsed > fadeStart then
+        alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
+      end
+
+      love.graphics.setColor(0, 0, 0, alpha)
+      love.graphics.print("-" .. animation.damage, textX + (tileW * 0.5) - 18, textY - 18 - rise, 0, 2, 2)
+      love.graphics.setColor(1, 0.1, 0.1, alpha)
+      love.graphics.print("-" .. animation.damage, textX + (tileW * 0.5) - 20, textY - 20 - rise, 0, 2, 2)
+      love.graphics.setColor(1, 1, 1, 1)
+    end
   end
 
   if camera then
@@ -303,8 +413,8 @@ function love.keypressed(key)
   local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
-  elseif battle and gameMode == "animating" then
-    -- disable input during movement
+  elseif battle and battle:isAnimating() then
+    -- disable input during animations
   elseif gameMode == "move" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle then
@@ -333,8 +443,8 @@ function love.keypressed(key)
         battle:moveAttackTargetByKey(active, key)
       end
     elseif key == "return" or key == "kpenter" or key == "enter" then
-      if battle and active and battle:confirmAttack(active) then
-        advanceTurn(active)
+      if battle and active then
+        battle:confirmAttack(active)
       end
     elseif key == "tab" then
       if battle then

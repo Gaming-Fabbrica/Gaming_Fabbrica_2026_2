@@ -15,8 +15,14 @@ function Battle.new(cols, rows, map)
     attackTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
+    attackAnimation = nil,
+    completedActionCharacter = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
+    attackLungeDuration = 0.14,
+    attackImpactDuration = 0.12,
+    attackRetreatDuration = 0.14,
+    attackHoldDuration = 0.45,
   }
   return setmetatable(instance, Battle)
 end
@@ -43,7 +49,9 @@ function Battle:startTurn()
   self.moveRange = {}
   self.attackRange = {}
   self.moveAnimation = nil
+  self.attackAnimation = nil
   self.movingCharacter = nil
+  self.completedActionCharacter = nil
 end
 
 function Battle:startActionPhase()
@@ -65,6 +73,9 @@ function Battle:setMode(mode)
   end
   if mode ~= "attack" then
     self.attackRange = {}
+  end
+  if mode ~= "attack_animating" then
+    self.attackAnimation = nil
   end
 end
 
@@ -101,6 +112,10 @@ function Battle:isAttackMode()
   return self.mode == "attack"
 end
 
+function Battle:getAttackAnimation()
+  return self.attackAnimation
+end
+
 function Battle:getMoveRange()
   return self.moveRange
 end
@@ -114,7 +129,7 @@ function Battle:getMoveAnimation()
 end
 
 function Battle:isAnimating()
-  return self.moveAnimation ~= nil
+  return self.moveAnimation ~= nil or self.attackAnimation ~= nil
 end
 
 function Battle:isAnimatingCharacter(character)
@@ -126,6 +141,12 @@ function Battle:getAnimationState(character)
     return self.moveAnimation
   end
   return nil
+end
+
+function Battle:consumeCompletedActionCharacter()
+  local character = self.completedActionCharacter
+  self.completedActionCharacter = nil
+  return character
 end
 
 function Battle:isReachable(column, row)
@@ -472,13 +493,16 @@ function Battle:confirmAttack(activeCharacter)
   end
 
   self:updateCharacterDirection(activeCharacter, activeCharacter.column, target.column)
-  target.hp = target.hp - self:calculateDamage(activeCharacter, target)
-  if target.hp <= 0 then
-    self:defeatCharacter(target)
-  end
-
   self.attackRange = {}
-  self.mode = "menu"
+  self.mode = "attack_animating"
+  self.attackAnimation = {
+    attacker = activeCharacter,
+    target = target,
+    damage = self:calculateDamage(activeCharacter, target),
+    timer = 0,
+    applied = false,
+    defeated = false,
+  }
   return true
 end
 
@@ -493,29 +517,57 @@ function Battle:cancelAttackMode()
 end
 
 function Battle:update(dt)
-  if not self.moveAnimation then
+  if self.moveAnimation then
+    local animation = self.moveAnimation
+    animation.timer = animation.timer + dt
+    while animation.timer >= self.moveStepDuration do
+      animation.step = animation.step + 1
+      animation.timer = animation.timer - self.moveStepDuration
+
+      if animation.step >= #animation.path then
+        local finalNode = animation.path[#animation.path]
+        animation.character:setPosition(finalNode.column, finalNode.row)
+        self.moveAnimation = nil
+        self.movingCharacter = nil
+        self:startActionPhase()
+        return
+      end
+
+      local fromNode = animation.path[animation.step]
+      local toNode = animation.path[animation.step + 1]
+      if fromNode and toNode then
+        self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
+      end
+    end
     return
   end
 
-  local animation = self.moveAnimation
-  animation.timer = animation.timer + dt
-  while animation.timer >= self.moveStepDuration do
-    animation.step = animation.step + 1
-    animation.timer = animation.timer - self.moveStepDuration
+  if self.attackAnimation then
+    local animation = self.attackAnimation
+    animation.timer = animation.timer + dt
 
-    if animation.step >= #animation.path then
-      local finalNode = animation.path[#animation.path]
-      animation.character:setPosition(finalNode.column, finalNode.row)
-      self.moveAnimation = nil
-      self.movingCharacter = nil
-      self:startActionPhase()
-      return
+    if not animation.applied and animation.timer >= self.attackLungeDuration then
+      animation.applied = true
+      animation.target.hp = animation.target.hp - animation.damage
+      if animation.target.hp <= 0 then
+        animation.target.hp = 0
+        animation.defeated = true
+      end
     end
 
-    local fromNode = animation.path[animation.step]
-    local toNode = animation.path[animation.step + 1]
-    if fromNode and toNode then
-      self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
+    local totalDuration =
+      self.attackLungeDuration
+      + self.attackImpactDuration
+      + self.attackRetreatDuration
+      + self.attackHoldDuration
+
+    if animation.timer >= totalDuration then
+      if animation.defeated then
+        self:defeatCharacter(animation.target)
+      end
+      self.attackAnimation = nil
+      self.mode = "menu"
+      self.completedActionCharacter = animation.attacker
     end
   end
 end
