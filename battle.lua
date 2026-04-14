@@ -7,8 +7,10 @@ function Battle.new(cols, rows, map)
     rows = rows,
     map = map,
     mode = "menu",
+    characters = {},
     moveRange = {},
     moveTarget = { column = 1, row = 1 },
+    movingCharacter = nil,
     moveAnimation = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
@@ -20,6 +22,10 @@ function Battle:setMap(map)
   self.map = map
 end
 
+function Battle:setCharacters(characters)
+  self.characters = characters or {}
+end
+
 function Battle:getMode()
   return self.mode
 end
@@ -28,10 +34,27 @@ function Battle:setMode(mode)
   self.mode = mode
   if mode ~= "move" then
     self.moveRange = {}
+    self.movingCharacter = nil
   end
   if mode ~= "animating" then
     self.moveAnimation = nil
   end
+end
+
+function Battle:isCharacterAt(column, row, ignoreCharacter)
+  for _, character in ipairs(self.characters) do
+    if character ~= ignoreCharacter and character.column == column and character.row == row then
+      return true
+    end
+  end
+  return false
+end
+
+function Battle:isPassable(column, row, ignoreCharacter)
+  if not self.map[column] or not self.map[column][row] then
+    return false
+  end
+  return not self:isCharacterAt(column, row, ignoreCharacter)
 end
 
 function Battle:isMoveMode()
@@ -130,7 +153,7 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves)
 
         if
           self:isInMap(nextColumn, nextRow)
-          and self.map[nextColumn][nextRow]
+          and self:isPassable(nextColumn, nextRow, self.movingCharacter)
           and not visited[nextKey]
         then
           visited[nextKey] = distance + 1
@@ -175,7 +198,7 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
 
       if
         self:isInMap(nextColumn, nextRow)
-        and self.map[nextColumn][nextRow]
+        and self:isPassable(nextColumn, nextRow, self.movingCharacter)
         and not visited[nextKey]
       then
         visited[nextKey] = true
@@ -216,6 +239,7 @@ function Battle:startMoveSelection(activeCharacter)
   self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov)
   self.moveTarget.column = activeCharacter.column
   self.moveTarget.row = activeCharacter.row
+  self.movingCharacter = activeCharacter
   self.mode = "move"
 end
 
@@ -255,6 +279,7 @@ end
 
 function Battle:confirmMove(activeCharacter)
   if self:isReachable(self.moveTarget.column, self.moveTarget.row) then
+    self.movingCharacter = activeCharacter
     local path = self:getPathToTarget(
       activeCharacter.column,
       activeCharacter.row,
@@ -296,6 +321,7 @@ function Battle:update(dt)
       local finalNode = animation.path[#animation.path]
       animation.character:setPosition(finalNode.column, finalNode.row)
       self.moveAnimation = nil
+      self.movingCharacter = nil
       self.mode = "menu"
       return
     end

@@ -13,6 +13,7 @@ local tileSpacingX = 0
 local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
+local stoneTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
@@ -21,6 +22,11 @@ local camera = nil
 local battle = nil
 
 local map = {}
+local obstacleTiles = {
+  {column = 4, row = 4},
+  {column = 9, row = 6},
+  {column = 14, row = 12},
+}
 local characters = {}
 local currentTurn = 1
 
@@ -74,6 +80,7 @@ function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
 
   tile = love.graphics.newImage("assets/sprites/hexa.png")
+  stoneTile = love.graphics.newImage("assets/sprites/stone.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   tileW = tile:getWidth()
@@ -87,9 +94,13 @@ function love.load()
       map[c][r] = true
     end
   end
+  for _, obstacle in ipairs(obstacleTiles) do
+    map[obstacle.column][obstacle.row] = false
+  end
   battle = Battle.new(cols, rows, map)
 
   characters = loadSprites()
+  battle:setCharacters(characters)
   local screenW, screenH = love.window.getDesktopDimensions(1)
   love.window.setMode(screenW, screenH, {
     fullscreen = true,
@@ -157,8 +168,8 @@ function love.draw()
 
   for c = 1, cols do
     for r = 1, rows do
+      local x, y = gridToScreen(c, r)
       if map[c][r] then
-        local x, y = gridToScreen(c, r)
         love.graphics.draw(tile, x, y)
         if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
           local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
@@ -166,6 +177,8 @@ function love.draw()
           love.graphics.draw(moveTile, x, y)
           love.graphics.setColor(1, 1, 1, 1)
         end
+      else
+        love.graphics.draw(stoneTile, x, y)
       end
     end
   end
