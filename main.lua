@@ -102,6 +102,7 @@ function love.load()
     map[obstacle.column][obstacle.row] = false
   end
   battle = Battle.new(cols, rows, map)
+  battle:startTurn()
 
   characters = loadSprites()
   battle:setCharacters(characters)
@@ -117,6 +118,7 @@ end
 function love.update(dt)
   if battle then
     battle:update(dt)
+    Menu:setPhase(battle:getTurnPhase())
   end
 
   local active = getActiveCharacter()
@@ -240,13 +242,14 @@ function love.draw()
   if active then
     love.graphics.print(
       string.format(
-        "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Action: %s",
+        "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
         currentTurn,
         active.name,
         active.hp,
         active.mov,
         active.def,
         active.atk,
+        battle and battle:getTurnPhase() or "move",
         Menu:selectedAction()
       ),
       10,
@@ -272,10 +275,13 @@ function love.keypressed(key)
       end
     elseif key == "return" or key == "kpenter" or key == "enter" then
       if active then
+        local didMove = false
         if battle then
-          battle:confirmMove(active)
+          didMove = battle:confirmMove(active)
         end
-        Menu:reset()
+        if didMove then
+          Menu:reset()
+        end
       end
     elseif key == "tab" then
       -- cancel move mode and keep current turn
@@ -286,9 +292,18 @@ function love.keypressed(key)
     end
   elseif key == "return" or key == "kpenter" or key == "enter" then
     if active then
-      if Menu:isMoveSelected() then
-        if battle then
+      local selectedAction = Menu:selectedAction()
+      if battle and battle:getTurnPhase() == "move" then
+        if Menu:isMoveSelected() then
           battle:startMoveSelection(active)
+        elseif selectedAction == "Skip" then
+          battle:startActionPhase()
+        end
+      elseif battle and battle:getTurnPhase() == "action" then
+        if selectedAction == "Attack" or selectedAction == "Skill" or selectedAction == "Item" then
+          currentTurn = currentTurn % #characters + 1
+          battle:startTurn()
+          Menu:reset()
         end
       end
     end
@@ -296,12 +311,6 @@ function love.keypressed(key)
     Menu:prev()
   elseif key == "down" then
     Menu:next()
-  elseif key == "tab" then
-    currentTurn = currentTurn % #characters + 1
-    Menu:reset()
-    if battle then
-      battle:setMode("menu")
-    end
   elseif key == "1" then
     Menu:setIndex(1)
   elseif key == "2" then

@@ -7,6 +7,7 @@ function Battle.new(cols, rows, map)
     rows = rows,
     map = map,
     mode = "menu",
+    turnPhase = "move",
     characters = {},
     moveRange = {},
     moveTarget = { column = 1, row = 1 },
@@ -28,6 +29,25 @@ end
 
 function Battle:getMode()
   return self.mode
+end
+
+function Battle:getTurnPhase()
+  return self.turnPhase
+end
+
+function Battle:startTurn()
+  self.turnPhase = "move"
+  self.mode = "menu"
+  self.moveRange = {}
+  self.moveAnimation = nil
+  self.movingCharacter = nil
+end
+
+function Battle:startActionPhase()
+  self.turnPhase = "action"
+  self.mode = "menu"
+  self.moveRange = {}
+  self.movingCharacter = nil
 end
 
 function Battle:setMode(mode)
@@ -252,6 +272,9 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
 end
 
 function Battle:startMoveSelection(activeCharacter)
+  if self.turnPhase ~= "move" then
+    return
+  end
   self.movingCharacter = activeCharacter
   self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov)
   self.moveTarget.column = activeCharacter.column
@@ -338,7 +361,7 @@ function Battle:update(dt)
       animation.character:setPosition(finalNode.column, finalNode.row)
       self.moveAnimation = nil
       self.movingCharacter = nil
-      self.mode = "menu"
+      self:startActionPhase()
       return
     end
   end
