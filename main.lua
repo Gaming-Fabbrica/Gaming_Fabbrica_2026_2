@@ -3,8 +3,8 @@ local Camera = require("camera")
 local Menu = require("menu")
 local Battle = require("battle")
 
-local cols = 10
-local rows = 10
+local cols = 20
+local rows = 20
 
 local tile = nil
 local tileW = 0
@@ -12,6 +12,7 @@ local tileH = 0
 local tileSpacingX = 0
 local tileSpacingY = 0
 local cursor = nil
+local moveTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
@@ -49,6 +50,7 @@ function love.load()
 
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
+  moveTile = love.graphics.newImage("assets/sprites/move.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
@@ -119,8 +121,8 @@ function love.draw()
         local x, y = gridToScreen(c, r)
         love.graphics.draw(tile, x, y)
         if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
-          love.graphics.setColor(1, 1, 0, 0.5)
-          love.graphics.draw(tile, x, y)
+          love.graphics.setColor(1, 1, 1, 0.5)
+          love.graphics.draw(moveTile, x, y)
           love.graphics.setColor(1, 1, 1, 1)
         end
       end
