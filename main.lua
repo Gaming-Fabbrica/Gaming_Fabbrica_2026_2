@@ -14,6 +14,7 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
+local heartTile = nil
 local stoneTile = nil
 
 local characterScale = 1.0
@@ -142,6 +143,7 @@ function love.load()
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
+  heartTile = love.graphics.newImage("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
@@ -237,6 +239,15 @@ end
 
 function love.draw()
   local active = getActiveCharacter()
+  local hoveredCharacter = nil
+  if active and not (battle and battle:isAnimating()) then
+    local hoverColumn = active.column
+    local hoverRow = active.row
+    if battle and (battle:isMoveMode() or battle:isAttackMode()) then
+      hoverColumn, hoverRow = battle:getCursorColumnRow(active)
+    end
+    hoveredCharacter = Character.getAtTile(characters, hoverColumn, hoverRow)
+  end
 
   if camera then
     love.graphics.push()
@@ -286,6 +297,16 @@ function love.draw()
   )
   Character.drawDrawList(
     characterDrawList,
+    tileW,
+    tileH,
+    characterScale,
+    characterRightOffsetX,
+    characterFootOffsetY
+  )
+  Character.drawHoverHp(
+    hoveredCharacter,
+    characterDrawList,
+    heartTile,
     tileW,
     tileH,
     characterScale,
