@@ -19,6 +19,9 @@ local camera = nil
 local map = {}
 local characters = {}
 local currentTurn = 1
+local actionMenu = { "Move", "Attack", "Skill", "Item" }
+local selectedActionIndex = 1
+local actionMenuScale = 2
 
 local function loadSprites()
   return {
@@ -84,6 +87,8 @@ function love.resize(width, height)
 end
 
 function love.draw()
+  local active = characters[currentTurn]
+
   if camera then
     love.graphics.push()
     camera:apply()
@@ -98,7 +103,6 @@ function love.draw()
     end
   end
 
-  local active = characters[currentTurn]
   if active then
     local cursorX, cursorY = gridToScreen(active.column, active.row)
     love.graphics.draw(cursor, cursorX, cursorY)
@@ -128,19 +132,72 @@ function love.draw()
     love.graphics.pop()
   end
 
+  if active then
+    local tileX, tileY = gridToScreen(active.column, active.row)
+    local worldX = tileX + (tileW * 0.5)
+    local worldY = tileY + (tileH * 0.5)
+    local screenX, screenY = worldX, worldY
+    if camera then
+      screenX, screenY = camera:worldToScreen(worldX, worldY)
+    end
+
+    local menuX = screenX + tileW * 0.6
+    local menuY = screenY - (4 * 18) * 0.5
+    local menuWidth = 90 * actionMenuScale
+    local rowHeight = 18 * actionMenuScale
+    local padding = 6 * actionMenuScale
+    local menuHeight = (#actionMenu * rowHeight) + (padding * 2)
+
+    love.graphics.setColor(0, 0, 0, 0.7)
+    love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight, 4, 4)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight, 4, 4)
+
+    for i, action in ipairs(actionMenu) do
+      local y = menuY + padding + (i - 1) * rowHeight
+      if i == selectedActionIndex then
+        love.graphics.setColor(1, 1, 0, 1)
+        love.graphics.print("> " .. action, menuX + 4, y, 0, actionMenuScale, actionMenuScale)
+      else
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print("  " .. action, menuX + 4, y, 0, actionMenuScale, actionMenuScale)
+      end
+    end
+  end
+
   love.graphics.setColor(0, 0, 0)
-  love.graphics.print(
-    string.format("Turn %d: %s  HP:%d  MOV:%d", currentTurn, active.name, active.hp, active.mov),
-    10,
-    10
-  )
+  if active then
+    love.graphics.print(
+      string.format("Turn %d: %s  HP:%d  MOV:%d  Action: %s", currentTurn, active.name, active.hp, active.mov, actionMenu[selectedActionIndex]),
+      10,
+      10
+    )
+  else
+    love.graphics.print("No active character", 10, 10)
+  end
   love.graphics.setColor(1, 1, 1)
 end
 
 function love.keypressed(key)
   if key == "escape" then
     love.event.quit()
+  elseif key == "up" then
+    selectedActionIndex = math.max(1, selectedActionIndex - 1)
+  elseif key == "down" then
+    selectedActionIndex = math.min(#actionMenu, selectedActionIndex + 1)
+  elseif key == "return" or key == "kpenter" then
+    -- action selected (placeholder for future action handling)
+    selectedActionIndex = selectedActionIndex
   elseif key == "tab" then
     currentTurn = currentTurn % #characters + 1
+    selectedActionIndex = 1
+  elseif key == "1" then
+    selectedActionIndex = 1
+  elseif key == "2" then
+    selectedActionIndex = 2
+  elseif key == "3" then
+    selectedActionIndex = 3
+  elseif key == "4" then
+    selectedActionIndex = 4
   end
 end
