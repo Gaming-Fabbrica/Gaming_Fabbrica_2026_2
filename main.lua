@@ -25,9 +25,9 @@ local actionMenuScale = 2
 
 local function loadSprites()
   return {
-    Character.new("tank_girl", "assets/sprites/tank_girl.png", 2, 3, 5, 5, "right"),
-    Character.new("tank_boy", "assets/sprites/tank_boy.png", 5, 3, 5, 5, "left"),
-    Character.new("archer_boy", "assets/sprites/archer_boy.png", 8, 3, 5, 5, "right"),
+    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, 5, 5, "right"),
+    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, 5, 5, "left"),
+    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, 5, 5, "right"),
   }
 end
 
