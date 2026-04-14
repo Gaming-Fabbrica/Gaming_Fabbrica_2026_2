@@ -2,6 +2,7 @@ local Character = require("character")
 local Camera = require("camera")
 local Menu = require("menu")
 local Battle = require("battle")
+local Lifebar = require("lifebar")
 
 local cols = 20
 local rows = 20
@@ -14,7 +15,6 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
-local heartTile = nil
 local stoneTile = nil
 
 local characterScale = 1.0
@@ -22,6 +22,7 @@ local characterFootOffsetY = 32
 local characterRightOffsetX = 0
 local camera = nil
 local battle = nil
+local lifebar = nil
 
 local map = {}
 local obstacleTiles = {
@@ -143,7 +144,7 @@ function love.load()
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
-  heartTile = love.graphics.newImage("assets/sprites/items/heart.png")
+  lifebar = Lifebar.new("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
@@ -306,10 +307,9 @@ function love.draw()
     characterRightOffsetX,
     characterFootOffsetY
   )
-  Character.drawHoverHp(
+  lifebar:draw(
     hoveredCharacter,
     characterDrawList,
-    heartTile,
     tileW,
     tileH,
     characterScale,
