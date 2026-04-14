@@ -15,6 +15,9 @@ local characterScale = 1.0
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
 local camera = nil
+local gameMode = "menu"
+local moveRange = {}
+local moveTarget = { column = 1, row = 1 }
 
 local map = {}
 local characters = {}
@@ -38,6 +41,136 @@ local function gridToScreen(column, row)
     y = y + (tileH * 0.5)
   end
   return x, y
+end
+
+local function getActiveCharacter()
+  return characters[currentTurn]
+end
+
+local function isInMap(column, row)
+  return column >= 1 and column <= cols and row >= 1 and row <= rows
+end
+
+local function getHexNeighbors(column, row)
+  local neighbors = {}
+  if column % 2 == 0 then
+    neighbors = {
+      {column + 1, row},
+      {column - 1, row},
+      {column, row - 1},
+      {column, row + 1},
+      {column + 1, row - 1},
+      {column - 1, row - 1},
+    }
+  else
+    neighbors = {
+      {column + 1, row},
+      {column - 1, row},
+      {column, row - 1},
+      {column, row + 1},
+      {column + 1, row + 1},
+      {column - 1, row + 1},
+    }
+  end
+  return neighbors
+end
+
+local function getReachableTiles(startColumn, startRow, maxMoves)
+  local reachable = {}
+  if maxMoves < 1 then
+    return reachable
+  end
+
+  local queue = {
+    {startColumn, startRow, 0},
+  }
+  local visited = {[startColumn .. "," .. startRow] = 0}
+
+  local head = 1
+  while head <= #queue do
+    local node = queue[head]
+    head = head + 1
+
+    local column = node[1]
+    local row = node[2]
+    local distance = node[3]
+
+    local key = column .. "," .. row
+    if distance > 0 then
+      reachable[key] = true
+    end
+
+    if distance < maxMoves then
+      for _, neighbor in ipairs(getHexNeighbors(column, row)) do
+        local nextColumn = neighbor[1]
+        local nextRow = neighbor[2]
+        local nextKey = nextColumn .. "," .. nextRow
+
+        if isInMap(nextColumn, nextRow) and map[nextColumn][nextRow] and not visited[nextKey] then
+          visited[nextKey] = distance + 1
+          table.insert(queue, {nextColumn, nextRow, distance + 1})
+        end
+      end
+    end
+  end
+
+  return reachable
+end
+
+local function isMoveActionSelected()
+  return actionMenu[selectedActionIndex] == "Move"
+end
+
+local function isReachableForMove(column, row)
+  return moveRange[column .. "," .. row]
+end
+
+local function startMoveSelection(active)
+  moveRange = getReachableTiles(active.column, active.row, active.mov)
+  moveTarget.column = active.column
+  moveTarget.row = active.row
+  gameMode = "move"
+end
+
+local function moveTargetByKey(key)
+  local nextColumn = moveTarget.column
+  local nextRow = moveTarget.row
+  local neighbors = getHexNeighbors(moveTarget.column, moveTarget.row)
+  local candidates = {}
+
+  if key == "left" then
+    candidates[1] = neighbors[2]
+  elseif key == "right" then
+    candidates[1] = neighbors[1]
+  elseif key == "up" then
+    candidates[1] = neighbors[3]
+    candidates[2] = neighbors[5]
+  elseif key == "down" then
+    candidates[1] = neighbors[4]
+    candidates[2] = neighbors[6]
+  end
+
+  for _, candidate in ipairs(candidates) do
+    if candidate then
+      local c = candidate[1]
+      local r = candidate[2]
+      if isInMap(c, r) and isReachableForMove(c, r) then
+        nextColumn = c
+        nextRow = r
+        break
+      end
+    end
+  end
+
+  moveTarget.column = nextColumn
+  moveTarget.row = nextRow
+end
+
+local function confirmMove(active)
+  if isReachableForMove(moveTarget.column, moveTarget.row) then
+    active:setPosition(moveTarget.column, moveTarget.row)
+    gameMode = "menu"
+  end
 end
 
 function love.load()
@@ -70,13 +203,20 @@ function love.load()
 end
 
 function love.update()
-  local active = characters[currentTurn]
+  local active = getActiveCharacter()
   if active then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local focusX = tileX + (tileW * 0.5)
     local focusY = tileY + (tileH * 0.5)
     camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
     camera:follow(focusX, focusY)
+    if gameMode == "move" then
+      moveRange = moveRange
+    else
+      moveRange = {}
+    end
+  else
+    moveRange = {}
   end
 end
 
@@ -87,7 +227,7 @@ function love.resize(width, height)
 end
 
 function love.draw()
-  local active = characters[currentTurn]
+  local active = getActiveCharacter()
 
   if camera then
     love.graphics.push()
@@ -98,13 +238,24 @@ function love.draw()
     for r = 1, rows do
       if map[c][r] then
         local x, y = gridToScreen(c, r)
+        local key = c .. "," .. r
         love.graphics.draw(tile, x, y)
+        if active and gameMode == "move" and isReachableForMove(c, r) then
+          love.graphics.setColor(1, 1, 0, 0.5)
+          love.graphics.draw(tile, x, y)
+          love.graphics.setColor(1, 1, 1, 1)
+        end
       end
     end
   end
 
   if active then
-    local cursorX, cursorY = gridToScreen(active.column, active.row)
+    local cursorX, cursorY
+    if gameMode == "move" then
+      cursorX, cursorY = gridToScreen(moveTarget.column, moveTarget.row)
+    else
+      cursorX, cursorY = gridToScreen(active.column, active.row)
+    end
     love.graphics.draw(cursor, cursorX, cursorY)
   end
 
@@ -179,18 +330,39 @@ function love.draw()
 end
 
 function love.keypressed(key)
+  local active = getActiveCharacter()
   if key == "escape" then
     love.event.quit()
+  elseif gameMode == "move" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      moveTargetByKey(key)
+    elseif key == "return" or key == "kpenter" then
+      if active then
+        confirmMove(active)
+        selectedActionIndex = 1
+      end
+    elseif key == "tab" then
+      -- cancel move mode and keep current turn
+      gameMode = "menu"
+      selectedActionIndex = 1
+    end
+  elseif key == "return" or key == "kpenter" then
+    if active then
+      if isMoveActionSelected() then
+        startMoveSelection(active)
+      else
+        -- action selected (placeholder for future action handling)
+        selectedActionIndex = selectedActionIndex
+      end
+    end
   elseif key == "up" then
     selectedActionIndex = math.max(1, selectedActionIndex - 1)
   elseif key == "down" then
     selectedActionIndex = math.min(#actionMenu, selectedActionIndex + 1)
-  elseif key == "return" or key == "kpenter" then
-    -- action selected (placeholder for future action handling)
-    selectedActionIndex = selectedActionIndex
   elseif key == "tab" then
     currentTurn = currentTurn % #characters + 1
     selectedActionIndex = 1
+    gameMode = "menu"
   elseif key == "1" then
     selectedActionIndex = 1
   elseif key == "2" then
