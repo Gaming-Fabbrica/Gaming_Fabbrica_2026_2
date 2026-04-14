@@ -205,11 +205,20 @@ end
 function love.update()
   local active = getActiveCharacter()
   if active then
-    local tileX, tileY = gridToScreen(active.column, active.row)
+    local focusColumn = active.column
+    local focusRow = active.row
+    if gameMode == "move" then
+      focusColumn = moveTarget.column
+      focusRow = moveTarget.row
+    end
+
+    local tileX, tileY = gridToScreen(focusColumn, focusRow)
     local focusX = tileX + (tileW * 0.5)
     local focusY = tileY + (tileH * 0.5)
+
     camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
-    camera:follow(focusX, focusY)
+    camera:setTarget(focusX, focusY)
+    camera:update()
     if gameMode == "move" then
       moveRange = moveRange
     else
