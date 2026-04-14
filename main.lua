@@ -360,6 +360,7 @@ function love.draw()
     love.graphics.draw(cursor, cursorX, cursorY)
   end
 
+  local characterDrawList = {}
   for _, character in ipairs(characters) do
     local x, y, jumpOffset, scaleXFactor, alpha = getCharacterRenderState(character)
     if not x then
@@ -368,13 +369,34 @@ function love.draw()
       scaleXFactor = 1
       alpha = 1
     end
+    characterDrawList[#characterDrawList + 1] = {
+      character = character,
+      x = x,
+      y = y,
+      jumpOffset = jumpOffset or 0,
+      scaleXFactor = scaleXFactor or 1,
+      alpha = alpha or 1,
+      sortY = y + (tileH * 0.5),
+      sortX = x + (tileW * 0.5),
+    }
+  end
+
+  table.sort(characterDrawList, function(a, b)
+    if a.sortY == b.sortY then
+      return a.sortX < b.sortX
+    end
+    return a.sortY < b.sortY
+  end)
+
+  for _, entry in ipairs(characterDrawList) do
+    local character = entry.character
     local spriteW = character.sprite:getWidth()
     local spriteH = character.sprite:getHeight()
     local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
-    local directionScale = (character.direction == "left" and -scale or scale) * (scaleXFactor or 1)
-    local tileCenterX = x + (tileW * 0.5)
-    local tileCenterY = y + (tileH * 0.5) - jumpOffset
-    love.graphics.setColor(1, 1, 1, alpha or 1)
+    local directionScale = (character.direction == "left" and -scale or scale) * entry.scaleXFactor
+    local tileCenterX = entry.x + (tileW * 0.5)
+    local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
+    love.graphics.setColor(1, 1, 1, entry.alpha)
     love.graphics.draw(
       character.sprite,
       tileCenterX + characterRightOffsetX,
