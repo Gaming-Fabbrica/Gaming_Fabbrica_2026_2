@@ -35,9 +35,9 @@ local currentTurn = 1
 
 local function loadSprites()
   return {
-    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, 5, 4, "right"),
-    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, 5, 4, "left"),
-    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, 5, 4, "right"),
+    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, Character.rollStats(16), "right"),
+    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, Character.rollStats(16), "left"),
+    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, Character.rollStats(16), "right"),
   }
 end
 
@@ -81,6 +81,7 @@ end
 
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
+  math.randomseed(os.time())
 
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   stoneTile = love.graphics.newImage("assets/sprites/stone.png")
@@ -238,7 +239,16 @@ function love.draw()
   love.graphics.setColor(0, 0, 0)
   if active then
     love.graphics.print(
-      string.format("Turn %d: %s  HP:%d  MOV:%d  Action: %s", currentTurn, active.name, active.hp, active.mov, Menu:selectedAction()),
+      string.format(
+        "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Action: %s",
+        currentTurn,
+        active.name,
+        active.hp,
+        active.mov,
+        active.def,
+        active.atk,
+        Menu:selectedAction()
+      ),
       10,
       10
     )
