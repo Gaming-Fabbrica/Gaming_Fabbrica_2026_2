@@ -564,7 +564,23 @@ function Battle:confirmMove(activeCharacter)
   return false
 end
 
+function Battle:isBackAttack(attacker, defender)
+  local attackerX = self:getGridVector(attacker.column, attacker.row)
+  local defenderX = self:getGridVector(defender.column, defender.row)
+
+  if defender.direction == "right" then
+    return attackerX < defenderX
+  elseif defender.direction == "left" then
+    return attackerX > defenderX
+  end
+
+  return false
+end
+
 function Battle:calculateDamage(attacker, defender)
+  if self:isBackAttack(attacker, defender) then
+    return math.max(1, attacker.atk)
+  end
   return math.max(1, attacker.atk - defender.def)
 end
 
