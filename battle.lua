@@ -16,6 +16,7 @@ function Battle.new(cols, rows, map)
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
+    deathAnimation = nil,
     completedActionCharacter = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
@@ -24,6 +25,7 @@ function Battle.new(cols, rows, map)
     attackImpactDuration = 0.12,
     attackRetreatDuration = 0.14,
     attackHoldDuration = 0.45,
+    deathDuration = 0.75,
   }
   return setmetatable(instance, Battle)
 end
@@ -51,6 +53,7 @@ function Battle:startTurn()
   self.attackRange = {}
   self.moveAnimation = nil
   self.attackAnimation = nil
+  self.deathAnimation = nil
   self.movingCharacter = nil
   self.completedActionCharacter = nil
 end
@@ -77,6 +80,9 @@ function Battle:setMode(mode)
   end
   if mode ~= "attack_animating" then
     self.attackAnimation = nil
+  end
+  if mode ~= "death_animating" then
+    self.deathAnimation = nil
   end
 end
 
@@ -117,6 +123,10 @@ function Battle:getAttackAnimation()
   return self.attackAnimation
 end
 
+function Battle:getDeathAnimation()
+  return self.deathAnimation
+end
+
 function Battle:getMoveRange()
   return self.moveRange
 end
@@ -130,7 +140,7 @@ function Battle:getMoveAnimation()
 end
 
 function Battle:isAnimating()
-  return self.moveAnimation ~= nil or self.attackAnimation ~= nil
+  return self.moveAnimation ~= nil or self.attackAnimation ~= nil or self.deathAnimation ~= nil
 end
 
 function Battle:isAnimatingCharacter(character)
@@ -565,9 +575,30 @@ function Battle:update(dt)
 
     if animation.timer >= totalDuration then
       if animation.defeated then
-        self:defeatCharacter(animation.target)
+        self.attackAnimation = nil
+        self.mode = "death_animating"
+        self.deathAnimation = {
+          character = animation.target,
+          attacker = animation.attacker,
+          timer = 0,
+        }
+        return
       end
       self.attackAnimation = nil
+      self.mode = "menu"
+      self.completedActionCharacter = animation.attacker
+      return
+    end
+    return
+  end
+
+  if self.deathAnimation then
+    local animation = self.deathAnimation
+    animation.timer = animation.timer + dt
+
+    if animation.timer >= self.deathDuration then
+      self:defeatCharacter(animation.character)
+      self.deathAnimation = nil
       self.mode = "menu"
       self.completedActionCharacter = animation.attacker
     end

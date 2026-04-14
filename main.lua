@@ -176,15 +176,39 @@ local function getAttackAnimationRenderState(character)
   return nil
 end
 
+local function getDeathAnimationRenderState(character)
+  if not battle then
+    return nil
+  end
+
+  local animation = battle:getDeathAnimation()
+  if not animation or character ~= animation.character then
+    return nil
+  end
+
+  local baseX, baseY = gridToScreen(character.column, character.row)
+  local ratio = math.min(1, animation.timer / battle.deathDuration)
+  local rise = 72 * ratio
+  local flipScaleX = math.cos(ratio * math.pi * 3)
+  local alpha = 1 - ratio
+
+  return baseX, baseY - rise, 0, flipScaleX, alpha
+end
+
 local function getCharacterRenderState(character)
-  local x, y, jumpOffset = getAnimationRenderState(character)
+  local x, y, jumpOffset, scaleXFactor, alpha = getDeathAnimationRenderState(character)
   if x then
-    return x, y, jumpOffset
+    return x, y, jumpOffset, scaleXFactor, alpha
+  end
+
+  x, y, jumpOffset = getAnimationRenderState(character)
+  if x then
+    return x, y, jumpOffset, 1, 1
   end
 
   x, y, jumpOffset = getAttackAnimationRenderState(character)
   if x then
-    return x, y, jumpOffset or 0
+    return x, y, jumpOffset or 0, 1, 1
   end
 
   return nil
@@ -261,6 +285,13 @@ function love.update(dt)
         tileX = (attackerX + targetX) * 0.5
         tileY = (attackerY + targetY) * 0.5
       end
+    elseif battle and battle:getDeathAnimation() then
+      local deathAnimation = battle:getDeathAnimation()
+      local deathX, deathY = getDeathAnimationRenderState(deathAnimation.character)
+      if deathX then
+        tileX = deathX
+        tileY = deathY
+      end
     end
     if not tileX then
       tileX, tileY = getAnimationRenderState(active)
@@ -330,17 +361,20 @@ function love.draw()
   end
 
   for _, character in ipairs(characters) do
-    local x, y, jumpOffset = getCharacterRenderState(character)
+    local x, y, jumpOffset, scaleXFactor, alpha = getCharacterRenderState(character)
     if not x then
       x, y = gridToScreen(character.column, character.row)
       jumpOffset = 0
+      scaleXFactor = 1
+      alpha = 1
     end
     local spriteW = character.sprite:getWidth()
     local spriteH = character.sprite:getHeight()
     local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
-    local directionScale = character.direction == "left" and -scale or scale
+    local directionScale = (character.direction == "left" and -scale or scale) * (scaleXFactor or 1)
     local tileCenterX = x + (tileW * 0.5)
     local tileCenterY = y + (tileH * 0.5) - jumpOffset
+    love.graphics.setColor(1, 1, 1, alpha or 1)
     love.graphics.draw(
       character.sprite,
       tileCenterX + characterRightOffsetX,
@@ -351,6 +385,7 @@ function love.draw()
       spriteW * 0.5,
       spriteH
     )
+    love.graphics.setColor(1, 1, 1, 1)
   end
 
   if battle and battle:getAttackAnimation() then
