@@ -45,6 +45,31 @@ local function getActiveCharacter()
   return characters[currentTurn]
 end
 
+local function getAnimationRenderState(character)
+  if not battle then
+    return nil
+  end
+
+  local animation = battle:getAnimationState(character)
+  if not animation or not animation.path then
+    return nil
+  end
+
+  local fromNode = animation.path[animation.step]
+  local toNode = animation.path[animation.step + 1]
+  if not fromNode or not toNode then
+    return nil
+  end
+
+  local ratio = math.min(1, animation.timer / battle.moveStepDuration)
+  local fromX, fromY = gridToScreen(fromNode.column, fromNode.row)
+  local toX, toY = gridToScreen(toNode.column, toNode.row)
+  local x = fromX + (toX - fromX) * ratio
+  local y = fromY + (toY - fromY) * ratio
+  local jump = math.sin(math.pi * ratio) * battle.jumpHeight
+  return x, y, jump
+end
+
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
 
@@ -74,7 +99,11 @@ function love.load()
   camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
 end
 
-function love.update()
+function love.update(dt)
+  if battle then
+    battle:update(dt)
+  end
+
   local active = getActiveCharacter()
   if active then
     local gameMode = battle and battle:getMode() or "menu"
@@ -85,6 +114,17 @@ function love.update()
     end
 
     local tileX, tileY = gridToScreen(focusColumn, focusRow)
+    if gameMode == "animating" then
+      local animatedX, animatedY = getAnimationRenderState(active)
+      if animatedX then
+        tileX = animatedX
+        tileY = animatedY
+      end
+    end
+    if not tileX then
+      tileX, tileY = getAnimationRenderState(active)
+    end
+
     local focusX = tileX + (tileW * 0.5)
     local focusY = tileY + (tileH * 0.5)
 
@@ -121,7 +161,8 @@ function love.draw()
         local x, y = gridToScreen(c, r)
         love.graphics.draw(tile, x, y)
         if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
-          love.graphics.setColor(1, 1, 1, 0.5)
+          local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+          love.graphics.setColor(1, 1, 1, glow)
           love.graphics.draw(moveTile, x, y)
           love.graphics.setColor(1, 1, 1, 1)
         end
@@ -129,7 +170,7 @@ function love.draw()
     end
   end
 
-  if active then
+  if active and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
     if battle and battle:isMoveMode() then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
@@ -141,13 +182,17 @@ function love.draw()
   end
 
   for _, character in ipairs(characters) do
-    local x, y = gridToScreen(character.column, character.row)
+    local x, y, jumpOffset = getAnimationRenderState(character)
+    if not x then
+      x, y = gridToScreen(character.column, character.row)
+      jumpOffset = 0
+    end
     local spriteW = character.sprite:getWidth()
     local spriteH = character.sprite:getHeight()
     local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
     local directionScale = character.direction == "left" and -scale or scale
     local tileCenterX = x + (tileW * 0.5)
-    local tileCenterY = y + (tileH * 0.5)
+    local tileCenterY = y + (tileH * 0.5) - jumpOffset
     love.graphics.draw(
       character.sprite,
       tileCenterX + characterRightOffsetX,
@@ -164,7 +209,8 @@ function love.draw()
     love.graphics.pop()
   end
 
-  if active then
+  local isAnimating = battle and battle:isAnimating()
+  if active and not isAnimating then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
@@ -191,6 +237,8 @@ function love.keypressed(key)
   local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
+  elseif battle and gameMode == "animating" then
+    -- disable input during movement
   elseif gameMode == "move" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle then

@@ -9,6 +9,9 @@ function Battle.new(cols, rows, map)
     mode = "menu",
     moveRange = {},
     moveTarget = { column = 1, row = 1 },
+    moveAnimation = nil,
+    moveStepDuration = 0.6,
+    jumpHeight = 64,
   }
   return setmetatable(instance, Battle)
 end
@@ -26,6 +29,9 @@ function Battle:setMode(mode)
   if mode ~= "move" then
     self.moveRange = {}
   end
+  if mode ~= "animating" then
+    self.moveAnimation = nil
+  end
 end
 
 function Battle:isMoveMode()
@@ -34,6 +40,25 @@ end
 
 function Battle:getMoveRange()
   return self.moveRange
+end
+
+function Battle:getMoveAnimation()
+  return self.moveAnimation
+end
+
+function Battle:isAnimating()
+  return self.moveAnimation ~= nil
+end
+
+function Battle:isAnimatingCharacter(character)
+  return self.moveAnimation ~= nil and self.moveAnimation.character == character
+end
+
+function Battle:getAnimationState(character)
+  if self.moveAnimation and self.moveAnimation.character == character then
+    return self.moveAnimation
+  end
+  return nil
 end
 
 function Battle:isReachable(column, row)
@@ -118,6 +143,75 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves)
   return reachable
 end
 
+function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
+  if startColumn == targetColumn and startRow == targetRow then
+    return {
+      {column = startColumn, row = startRow},
+    }
+  end
+
+  local queue = {
+    {startColumn, startRow},
+  }
+  local visited = {[startColumn .. "," .. startRow] = true}
+  local previous = {}
+
+  local head = 1
+  while head <= #queue do
+    local node = queue[head]
+    head = head + 1
+
+    local column = node[1]
+    local row = node[2]
+
+    if column == targetColumn and row == targetRow then
+      break
+    end
+
+    for _, neighbor in ipairs(self:getHexNeighbors(column, row)) do
+      local nextColumn = neighbor[1]
+      local nextRow = neighbor[2]
+      local nextKey = nextColumn .. "," .. nextRow
+
+      if
+        self:isInMap(nextColumn, nextRow)
+        and self.map[nextColumn][nextRow]
+        and not visited[nextKey]
+      then
+        visited[nextKey] = true
+        previous[nextKey] = {column, row}
+        queue[#queue + 1] = {nextColumn, nextRow}
+      end
+    end
+  end
+
+  local targetKey = targetColumn .. "," .. targetRow
+  if not visited[targetKey] then
+    return nil
+  end
+
+  local path = {}
+  local cursorColumn = targetColumn
+  local cursorRow = targetRow
+  while cursorColumn do
+    path[#path + 1] = {column = cursorColumn, row = cursorRow}
+    local currentKey = cursorColumn .. "," .. cursorRow
+    local prev = previous[currentKey]
+    if not prev then
+      break
+    end
+    cursorColumn = prev[1]
+    cursorRow = prev[2]
+  end
+
+  for i = 1, math.floor(#path * 0.5) do
+    local j = #path - i + 1
+    path[i], path[j] = path[j], path[i]
+  end
+
+  return path
+end
+
 function Battle:startMoveSelection(activeCharacter)
   self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov)
   self.moveTarget.column = activeCharacter.column
@@ -161,10 +255,23 @@ end
 
 function Battle:confirmMove(activeCharacter)
   if self:isReachable(self.moveTarget.column, self.moveTarget.row) then
-    activeCharacter:setPosition(self.moveTarget.column, self.moveTarget.row)
-    self.mode = "menu"
-    self.moveRange = {}
-    return true
+    local path = self:getPathToTarget(
+      activeCharacter.column,
+      activeCharacter.row,
+      self.moveTarget.column,
+      self.moveTarget.row
+    )
+    if path and #path > 1 then
+      self.moveRange = {}
+      self.mode = "animating"
+      self.moveAnimation = {
+        character = activeCharacter,
+        path = path,
+        step = 1,
+        timer = 0,
+      }
+      return true
+    end
   end
   return false
 end
@@ -172,6 +279,27 @@ end
 function Battle:cancelMoveMode()
   self.mode = "menu"
   self.moveRange = {}
+end
+
+function Battle:update(dt)
+  if not self.moveAnimation then
+    return
+  end
+
+  local animation = self.moveAnimation
+  animation.timer = animation.timer + dt
+  while animation.timer >= self.moveStepDuration do
+    animation.step = animation.step + 1
+    animation.timer = animation.timer - self.moveStepDuration
+
+    if animation.step >= #animation.path then
+      local finalNode = animation.path[#animation.path]
+      animation.character:setPosition(finalNode.column, finalNode.row)
+      self.moveAnimation = nil
+      self.mode = "menu"
+      return
+    end
+  end
 end
 
 return Battle
