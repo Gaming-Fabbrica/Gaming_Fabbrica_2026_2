@@ -23,18 +23,21 @@ local battle = nil
 
 local map = {}
 local obstacleTiles = {
+  {column = 3, row = 2},
+  {column = 3, row = 3},
+  {column = 3, row = 4},
+  {column = 4, row = 2},
+  {column = 4, row = 3},
   {column = 4, row = 4},
-  {column = 9, row = 6},
-  {column = 14, row = 12},
 }
 local characters = {}
 local currentTurn = 1
 
 local function loadSprites()
   return {
-    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, 5, 5, "right"),
-    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, 5, 5, "left"),
-    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, 5, 5, "right"),
+    Character.new("tank_girl", "assets/sprites/heroes/tank_girl.png", 2, 3, 5, 4, "right"),
+    Character.new("tank_boy", "assets/sprites/heroes/tank_boy.png", 5, 3, 5, 4, "left"),
+    Character.new("archer_boy", "assets/sprites/heroes/archer_boy.png", 8, 3, 5, 4, "right"),
   }
 end
 
