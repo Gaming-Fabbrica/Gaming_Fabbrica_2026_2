@@ -36,6 +36,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local resolvedStats = stats or Character.rollStats(16)
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
+  local resolvedTeam = team or "player"
   local instance = {
     name = name,
     className = resolvedClassName,
@@ -50,7 +51,8 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     column = column,
     row = row,
     direction = direction or "right",
-    team = team or "player",
+    team = resolvedTeam,
+    spriteFacing = resolvedStats.spriteFacing or (resolvedTeam == "enemy" and "left" or "right"),
   }
   return setmetatable(instance, Character)
 end
@@ -286,7 +288,10 @@ function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, 
   local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
   local scaleX = scale * entry.scaleXFactor
   local scaleY = scale * entry.scaleYFactor
-  local directionScale = character.direction == "left" and -scaleX or scaleX
+  local directionScale = scaleX
+  if character.direction ~= character.spriteFacing then
+    directionScale = -scaleX
+  end
   local tileCenterX = entry.x + (tileW * 0.5)
   local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
 

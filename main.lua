@@ -26,6 +26,7 @@ local battle = nil
 local lifebar = nil
 local enemyTurnState = nil
 local mapBackgroundScale = 2.5
+local hudFont = nil
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -369,6 +370,7 @@ function love.load()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
+  hudFont = love.graphics.newFont(28)
 
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
   local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
@@ -667,27 +669,35 @@ function love.draw()
     end)
   end
 
-  love.graphics.setColor(0, 0, 0)
+  local previousFont = love.graphics.getFont()
+  if hudFont then
+    love.graphics.setFont(hudFont)
+  end
+
   if active then
-    love.graphics.print(
-      string.format(
-        "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
-        currentTurn,
-        active.name,
-        active.hp,
-        active.mov,
-        active.def,
-        active.atk,
-        battle and battle:getTurnPhase() or "move",
-        Menu:selectedAction()
-      ),
-      10,
-      10
+    local hudText = string.format(
+      "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
+      currentTurn,
+      active.name,
+      active.hp,
+      active.mov,
+      active.def,
+      active.atk,
+      battle and battle:getTurnPhase() or "move",
+      Menu:selectedAction()
     )
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.print(hudText, 12, 12)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print(hudText, 10, 10)
   else
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.print("No active character", 12, 12)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("No active character", 10, 10)
   end
   love.graphics.setColor(1, 1, 1)
+  love.graphics.setFont(previousFont)
 end
 
 function love.keypressed(key)
