@@ -173,7 +173,7 @@ function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
 
-  mapBackground = love.graphics.newImage("assets/map_bg.png")
+  mapBackground = love.graphics.newImage("assets/map_bg2.png")
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
@@ -375,7 +375,7 @@ function love.draw()
   end
 
   if mapBackground then
-    love.graphics.draw(mapBackground, 0, 0, 0, 1.5, 1.5)
+    love.graphics.draw(mapBackground, 0, 0, 0, 2.5, 2.5)
   end
 
   for c = 1, cols do
