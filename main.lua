@@ -30,8 +30,12 @@ local lifebar = nil
 local enemyTurnState = nil
 local mapBackgroundScale = 2.5
 local hudFont = nil
+local resultFont = nil
 local terrainEffectScale = 0.9
 local terrainEffectAppearDuration = 0.25
+local battleResult = nil
+local battleResultTimer = 0
+local battleResultDuration = 1.0
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -60,20 +64,41 @@ local availableClasses = {
 }
 
 local enemyArchetypes = {
-  {name = "affamé", file = "affamé.png", stats = {hp = 8, mov = 5, def = 2, atk = 5, attackRange = 2}},
-  {name = "embourbe", file = "embourbe.png", stats = {hp = 12, mov = 3, def = 5, atk = 2}},
-  {name = "loup1", file = "loup1.png", stats = {hp = 6, mov = 6, def = 2, atk = 5}},
-  {name = "loup2", file = "loup2.png", stats = {hp = 8, mov = 6, def = 2, atk = 4}},
-  {name = "loup3", file = "loup3.png", stats = {hp = 10, mov = 5, def = 2, atk = 4}},
-  {name = "noye", file = "noye.png", stats = {hp = 10, mov = 4, def = 4, atk = 3}},
-  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 6, mov = 7, def = 2, atk = 4}},
-  {name = "serpentroche", file = "serpentroche.png", stats = {hp = 10, mov = 4, def = 4, atk = 3}},
-  {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 6, mov = 5, def = 2, atk = 6}},
-  {name = "trauma", file = "trauma.png", stats = {hp = 8, mov = 4, def = 3, atk = 5}},
-  {name = "trauma2", file = "trauma2.png", stats = {hp = 10, mov = 4, def = 3, atk = 4}},
-  {name = "trauma3", file = "trauma3.png", stats = {hp = 12, mov = 3, def = 3, atk = 4}},
+  {name = "affamé", file = "affamé.png", stats = {hp = 7, mov = 4, def = 1, atk = 5, attackRange = 2}},
+  {name = "embourbe", file = "embourbe.png", stats = {hp = 10, mov = 2, def = 4, atk = 2}},
+  {name = "loup1", file = "loup1.png", stats = {hp = 5, mov = 5, def = 1, atk = 5}},
+  {name = "loup2", file = "loup2.png", stats = {hp = 7, mov = 5, def = 1, atk = 4}},
+  {name = "loup3", file = "loup3.png", stats = {hp = 8, mov = 4, def = 1, atk = 4}},
+  {name = "noye", file = "noye.png", stats = {hp = 8, mov = 3, def = 3, atk = 3}},
+  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 5, mov = 6, def = 1, atk = 4}},
+  {name = "serpentroche", file = "serpentroche.png", stats = {hp = 8, mov = 3, def = 3, atk = 3}},
+  {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 5, mov = 4, def = 1, atk = 6}},
+  {name = "trauma", file = "trauma.png", stats = {hp = 7, mov = 3, def = 2, atk = 5}},
+  {name = "trauma2", file = "trauma2.png", stats = {hp = 8, mov = 3, def = 2, atk = 4}},
+  {name = "trauma3", file = "trauma3.png", stats = {hp = 10, mov = 2, def = 2, atk = 4}},
 }
 local enemySpawnCount = 6
+
+local function getBattleResultAlpha()
+  return math.min(1, battleResultTimer / battleResultDuration)
+end
+
+local function hasLivingTeam(teamName)
+  for _, character in ipairs(characters) do
+    if character.team == teamName then
+      return true
+    end
+  end
+  return false
+end
+
+local function beginBattleResult(result)
+  if battleResult then
+    return
+  end
+  battleResult = result
+  battleResultTimer = 0
+end
 
 local function shuffledCopy(list)
   local copy = {}
@@ -379,6 +404,7 @@ function love.load()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
   hudFont = love.graphics.newFont(28)
+  resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", 72)
 
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
   local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
@@ -418,6 +444,11 @@ function love.load()
 end
 
 function love.update(dt)
+  if battleResult then
+    battleResultTimer = math.min(battleResultDuration, battleResultTimer + dt)
+    return
+  end
+
   if battle then
     battle:update(dt)
     local completedActionCharacter = battle:consumeCompletedActionCharacter()
@@ -425,6 +456,15 @@ function love.update(dt)
       advanceTurn(completedActionCharacter)
     end
     Menu:setPhase(battle:getTurnPhase())
+  end
+
+  if not hasLivingTeam("player") then
+    beginBattleResult("game_over")
+    return
+  end
+  if not hasLivingTeam("enemy") then
+    beginBattleResult("victory")
+    return
   end
 
   local active = getActiveCharacter()
@@ -785,6 +825,37 @@ function love.draw()
   end
   love.graphics.setColor(1, 1, 1)
   love.graphics.setFont(previousFont)
+
+  if battleResult then
+    local alpha = getBattleResultAlpha()
+    local previousFont = love.graphics.getFont()
+    if resultFont then
+      love.graphics.setFont(resultFont)
+    end
+
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    local message = battleResult == "game_over" and "GAME OVER" or "VICTOIRE"
+    local textWidth = love.graphics.getFont():getWidth(message)
+    local textHeight = love.graphics.getFont():getHeight()
+    local textX = (width - textWidth) * 0.5
+    local textY = (height - textHeight) * 0.5
+
+    if battleResult == "game_over" then
+      love.graphics.setColor(0, 0, 0, alpha)
+      love.graphics.rectangle("fill", 0, 0, width, height)
+      love.graphics.setColor(1, 1, 1, alpha)
+      love.graphics.print(message, textX, textY)
+    else
+      love.graphics.setColor(1, 1, 1, alpha)
+      love.graphics.rectangle("fill", 0, 0, width, height)
+      love.graphics.setColor(1, 0.45, 0.05, alpha)
+      love.graphics.print(message, textX, textY)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(previousFont)
+  end
 end
 
 function love.keypressed(key)
@@ -792,6 +863,8 @@ function love.keypressed(key)
   local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
+  elseif battleResult then
+    return
   elseif active and active.team ~= "player" then
     -- disable player input during enemy turns
   elseif battle and battle:isAnimating() then
