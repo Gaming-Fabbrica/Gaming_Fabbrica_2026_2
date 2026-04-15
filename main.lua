@@ -7,6 +7,7 @@ local Lifebar = require("lifebar")
 local cols = 20
 local rows = 20
 
+local mapBackground = nil
 local tile = nil
 local tileW = 0
 local tileH = 0
@@ -171,6 +172,7 @@ function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
 
+  mapBackground = love.graphics.newImage("assets/map_bg.png")
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   stoneTile = love.graphics.newImage("assets/sprites/stone.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
@@ -368,6 +370,10 @@ function love.draw()
   if camera then
     love.graphics.push()
     camera:apply()
+  end
+
+  if mapBackground then
+    love.graphics.draw(mapBackground, 0, 0, 0, 1.5, 1.5)
   end
 
   for c = 1, cols do
