@@ -355,6 +355,18 @@ function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, 
   end
   local tileCenterX = entry.x + (tileW * 0.5)
   local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
+  local shadowCenterY = entry.y + (tileH * 0.5)
+
+  local shadowScaleY = math.max(0.35, math.min(1, entry.scaleYFactor or 1))
+  local shadowAlpha = 0.22 * entry.alpha * shadowScaleY
+  love.graphics.setColor(0, 0, 0, shadowAlpha)
+  love.graphics.ellipse(
+    "fill",
+    tileCenterX,
+    shadowCenterY + 24,
+    tileW * 0.2,
+    tileH * 0.08 * shadowScaleY
+  )
 
   love.graphics.setColor(entry.tintR or 1, entry.tintG or 1, entry.tintB or 1, entry.alpha)
   love.graphics.draw(
