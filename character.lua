@@ -347,8 +347,8 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
       end
 
       local damageText = "-" .. animation.damage
-      local damageScale = 3
-      local damageX = textX + (tileW * 0.5) - 30
+      local damageScale = animation.critical and 9 or 3
+      local damageX = textX + (tileW * 0.5) - (animation.critical and 88 or 30)
       local damageY = textY - 52 - rise
 
       love.graphics.setColor(0, 0, 0, alpha)
@@ -356,7 +356,11 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
       love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
       love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
       love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
-      love.graphics.setColor(1, 0.1, 0.1, alpha)
+      if animation.critical then
+        love.graphics.setColor(1, 0.9, 0.15, alpha)
+      else
+        love.graphics.setColor(1, 0.1, 0.1, alpha)
+      end
       love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
       love.graphics.setColor(1, 1, 1, 1)
     end

@@ -23,6 +23,7 @@ function Battle.new(cols, rows, map)
     deathQueue = nil,
     completedActionCharacter = nil,
     pendingScreenShake = nil,
+    pendingSlowMotion = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
     attackWindupDuration = 0.12,
@@ -47,6 +48,19 @@ function Battle:consumeScreenShake()
   local shake = self.pendingScreenShake
   self.pendingScreenShake = nil
   return shake
+end
+
+function Battle:triggerSlowMotion(duration, scale)
+  self.pendingSlowMotion = {
+    duration = duration or 0.18,
+    scale = scale or 0.35,
+  }
+end
+
+function Battle:consumeSlowMotion()
+  local slowMotion = self.pendingSlowMotion
+  self.pendingSlowMotion = nil
+  return slowMotion
 end
 
 function Battle:setMap(map)
@@ -962,10 +976,17 @@ function Battle:isBackAttack(attacker, defender)
 end
 
 function Battle:calculateDamage(attacker, defender)
+  local critical = attacker and attacker.team == "player" and love.math.random(6) == 1
+  local damage = nil
   if self:isBackAttack(attacker, defender) then
-    return math.max(1, attacker.atk)
+    damage = math.max(1, attacker.atk)
+  else
+    damage = math.max(1, attacker.atk - defender.def)
   end
-  return math.max(1, attacker.atk - defender.def)
+  if critical then
+    damage = damage + 2
+  end
+  return damage, critical
 end
 
 function Battle:defeatCharacter(target)
@@ -1051,12 +1072,14 @@ function Battle:confirmAttack(activeCharacter)
 
   self:updateCharacterDirection(activeCharacter, activeCharacter.column, target.column)
   self.attackRange = {}
+  local damage, critical = self:calculateDamage(activeCharacter, target)
   self.mode = "attack_animating"
   self.attackAnimation = {
     attacker = activeCharacter,
     target = target,
     startHp = target.hp,
-    damage = self:calculateDamage(activeCharacter, target),
+    damage = damage,
+    critical = critical,
     timer = 0,
     applied = false,
     defeatedTargets = {},
@@ -1163,6 +1186,10 @@ function Battle:update(dt)
         animation.target.hp = animation.target.hp - animation.damage
         if animation.target.team == "player" then
           self:triggerScreenShake(0.24, 14)
+        end
+        if animation.critical then
+          self:triggerScreenShake(0.32, 22)
+          self:triggerSlowMotion(0.2, 0.3)
         end
         if animation.target.hp <= 0 then
           animation.target.hp = 0

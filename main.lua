@@ -36,6 +36,8 @@ local battleResultTimer = 0
 local battleResultDuration = 1.0
 local introFadeAlpha = 0
 local introFadeDuration = 0.8
+local slowMotionTimer = 0
+local slowMotionScale = 1
 local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
@@ -112,6 +114,8 @@ local function resetGame()
   introFadeAlpha = 1
   enemyTurnState = nil
   currentTurn = 1
+  slowMotionTimer = 0
+  slowMotionScale = 1
   map = {}
   obstacles = {}
   characters = {}
@@ -484,6 +488,14 @@ function love.load()
 end
 
 function love.update(dt)
+  if slowMotionTimer > 0 then
+    slowMotionTimer = math.max(0, slowMotionTimer - dt)
+    if slowMotionTimer <= 0 then
+      slowMotionScale = 1
+    end
+  end
+  local updateDt = dt * slowMotionScale
+
   if introFadeAlpha > 0 then
     introFadeAlpha = math.max(0, introFadeAlpha - (dt / introFadeDuration))
   end
@@ -494,10 +506,15 @@ function love.update(dt)
   end
 
   if battle then
-    battle:update(dt)
+    battle:update(updateDt)
     local screenShake = battle:consumeScreenShake()
     if screenShake and camera then
       camera:startShake(screenShake.duration, screenShake.amplitude)
+    end
+    local slowMotion = battle:consumeSlowMotion()
+    if slowMotion then
+      slowMotionTimer = slowMotion.duration
+      slowMotionScale = slowMotion.scale
     end
     local completedActionCharacter = battle:consumeCompletedActionCharacter()
     if completedActionCharacter then
