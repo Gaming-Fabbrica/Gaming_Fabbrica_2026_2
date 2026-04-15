@@ -4,22 +4,35 @@ Obstacle.__index = Obstacle
 local TREE_SWAY_SPEED = 1.15
 local TREE_SWAY_ANGLE = 0.04
 local TREE_SCALE = 2.0
-local STONE_SCALE = 0.825
-local STONE_OFFSET_Y = -8
+local STONE_SCALE = 0.9075
+local STONE_OFFSET_Y = -48
 local TREE_PIVOT_RATIO = 0.9
 local STONE_VARIANTS = {
   "assets/sprites/stone1.png",
   "assets/sprites/stone2.png",
   "assets/sprites/stone3.png",
+  "assets/sprites/stone4.png",
+}
+local BUSH_VARIANTS = {
+  "assets/sprites/bush1.png",
+  "assets/sprites/bush2.png",
+  "assets/sprites/bush3.png",
 }
 local TREE_VARIANTS = {
   "assets/sprites/tree1.png",
   "assets/sprites/tree2.png",
   "assets/sprites/tree3.png",
+  "assets/sprites/tree4.png",
+  "assets/sprites/tree5.png",
+  "assets/sprites/tree6.png",
 }
 
 function Obstacle.new(kind, column, row, spritePath)
   local sprite = love.graphics.newImage(spritePath)
+  local scale = TREE_SCALE
+  if kind == "stone" or kind == "bush" then
+    scale = STONE_SCALE
+  end
 
   local instance = {
     kind = kind,
@@ -27,15 +40,18 @@ function Obstacle.new(kind, column, row, spritePath)
     row = row,
     sprite = sprite,
     spritePath = spritePath,
-    scale = kind == "stone" and STONE_SCALE or TREE_SCALE,
+    scale = scale,
   }
 
   return setmetatable(instance, Obstacle)
 end
 
 function Obstacle.randomForTile(column, row)
-  if math.random(2) == 1 then
+  local familyRoll = math.random(3)
+  if familyRoll == 1 then
     return Obstacle.new("stone", column, row, STONE_VARIANTS[math.random(#STONE_VARIANTS)])
+  elseif familyRoll == 2 then
+    return Obstacle.new("bush", column, row, BUSH_VARIANTS[math.random(#BUSH_VARIANTS)])
   end
   return Obstacle.new("tree", column, row, TREE_VARIANTS[math.random(#TREE_VARIANTS)])
 end

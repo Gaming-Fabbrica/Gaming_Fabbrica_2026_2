@@ -544,14 +544,16 @@ function love.keypressed(key)
       if battle and battle:getTurnPhase() == "move" then
         if Menu:isMoveSelected() then
           battle:startMoveSelection(active)
-        elseif selectedAction == "Skip" then
+        elseif selectedAction == "Rester ici" then
           battle:startActionPhase()
         end
       elseif battle and battle:getTurnPhase() == "action" then
-        if selectedAction == "Attack" then
+        if selectedAction == "Se battre" then
           if not battle:startAttackSelection(active) then
             advanceTurn(active)
           end
+        elseif selectedAction == "Passer son tour" then
+          advanceTurn(active)
         end
       end
     end

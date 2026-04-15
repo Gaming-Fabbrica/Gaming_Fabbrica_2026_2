@@ -2,17 +2,25 @@ local Menu = {}
 
 Menu.phase = "move"
 Menu.entriesByPhase = {
-  move = { "Move", "Skip" },
-  action = { "Attack", "Skill", "Item" },
+  move = { "Bouger", "Rester ici" },
+  action = { "Se battre", "Botte secrète", "Utiliser un objet", "Passer son tour" },
 }
 Menu.disabledEntriesByPhase = {
   action = {
-    Skill = true,
-    Item = true,
+    ["Botte secrète"] = true,
+    ["Utiliser un objet"] = true,
   },
 }
 Menu.selectedIndex = 1
 Menu.scale = 2
+Menu.font = nil
+
+function Menu:getFont()
+  if not self.font then
+    self.font = love.graphics.newFont(28)
+  end
+  return self.font
+end
 
 function Menu:reset()
   self.selectedIndex = 1
@@ -80,16 +88,24 @@ end
 
 function Menu:isMoveSelected()
   local action = self:selectedAction()
-  return type(action) == "string" and action:lower() == "move"
+  return type(action) == "string" and action:lower() == "bouger"
 end
 
 function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local entries = self:getEntries()
+  local font = self:getFont()
+  local previousFont = love.graphics.getFont()
+  love.graphics.setFont(font)
+  local lineHeight = font:getHeight()
   local menuX = worldX + tileW * 0.6
-  local menuY = worldY - (#entries * 18) * 0.5
-  local menuWidth = 90 * self.scale
-  local rowHeight = 18 * self.scale
+  local menuY = worldY - (#entries * lineHeight) * 0.5
+  local rowHeight = lineHeight
   local padding = 6 * self.scale
+  local textWidth = 0
+  for _, entry in ipairs(entries) do
+    textWidth = math.max(textWidth, font:getWidth("> " .. entry))
+  end
+  local menuWidth = textWidth + (padding * 2) + 8
   local menuHeight = (#entries * rowHeight) + (padding * 2)
 
   local screenX = menuX
@@ -97,7 +113,7 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   if worldToScreen then
     screenX, screenY = worldToScreen(worldX, worldY)
     screenX = screenX + tileW * 0.6
-    screenY = screenY - (#entries * 18) * 0.5
+    screenY = screenY - (#entries * lineHeight) * 0.5
   end
 
   love.graphics.setColor(0, 0, 0, 0.7)
@@ -113,17 +129,18 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print("> " .. entry, screenX + 4, y, 0, self.scale, self.scale)
+      love.graphics.print("> " .. entry, screenX + 8, y)
     else
       if self:isEntryEnabled(entry) then
         love.graphics.setColor(1, 1, 1, 1)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print("  " .. entry, screenX + 4, y, 0, self.scale, self.scale)
+      love.graphics.print("  " .. entry, screenX + 8, y)
     end
   end
   love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setFont(previousFont)
 end
 
 return Menu
