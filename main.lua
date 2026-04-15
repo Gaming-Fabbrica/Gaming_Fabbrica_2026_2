@@ -31,6 +31,7 @@ local enemyTurnState = nil
 local mapBackgroundScale = 2.5
 local hudFont = nil
 local resultFont = nil
+local resultPromptFont = nil
 local terrainEffectScale = 0.9
 local terrainEffectAppearDuration = 0.25
 local battleResult = nil
@@ -389,6 +390,9 @@ end
 function love.load()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
+  battleResult = nil
+  battleResultTimer = 0
+  enemyTurnState = nil
 
   mapBackground = love.graphics.newImage("assets/map_bg2.png")
   tile = love.graphics.newImage("assets/sprites/hexa.png")
@@ -405,6 +409,7 @@ function love.load()
   tileSpacingY = tileH
   hudFont = love.graphics.newFont(28)
   resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", 72)
+  resultPromptFont = love.graphics.newFont(24)
 
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
   local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
@@ -853,6 +858,20 @@ function love.draw()
       love.graphics.print(message, textX, textY)
     end
 
+    local prompt = "Appuyez sur Entree pour recommencer"
+    if resultPromptFont then
+      love.graphics.setFont(resultPromptFont)
+    end
+    local promptWidth = love.graphics.getFont():getWidth(prompt)
+    local promptX = (width - promptWidth) * 0.5
+    local promptY = textY + textHeight + 28
+    if battleResult == "game_over" then
+      love.graphics.setColor(1, 1, 1, alpha)
+    else
+      love.graphics.setColor(0.15, 0.15, 0.15, alpha)
+    end
+    love.graphics.print(prompt, promptX, promptY)
+
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(previousFont)
   end
@@ -864,6 +883,9 @@ function love.keypressed(key)
   if key == "escape" then
     love.event.quit()
   elseif battleResult then
+    if key == "return" or key == "kpenter" or key == "enter" then
+      love.load()
+    end
     return
   elseif active and active.team ~= "player" then
     -- disable player input during enemy turns

@@ -737,8 +737,10 @@ function Battle:moveTargetByKey(key)
 
   if key == "left" then
     candidates[1] = neighbors[2]
+    candidates[2] = neighbors[6]
   elseif key == "right" then
     candidates[1] = neighbors[1]
+    candidates[2] = neighbors[5]
   elseif key == "up" then
     candidates[1] = neighbors[3]
     candidates[2] = neighbors[5]
