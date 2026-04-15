@@ -55,18 +55,18 @@ local availableClasses = {
 }
 
 local enemyArchetypes = {
-  {name = "affamé", file = "affamé.png", stats = {hp = 4, mov = 5, def = 2, atk = 5}},
-  {name = "embourbe", file = "embourbe.png", stats = {hp = 6, mov = 3, def = 5, atk = 2}},
-  {name = "loup1", file = "loup1.png", stats = {hp = 3, mov = 6, def = 2, atk = 5}},
-  {name = "loup2", file = "loup2.png", stats = {hp = 4, mov = 6, def = 2, atk = 4}},
-  {name = "loup3", file = "loup3.png", stats = {hp = 5, mov = 5, def = 2, atk = 4}},
-  {name = "noye", file = "noye.png", stats = {hp = 5, mov = 4, def = 4, atk = 3}},
-  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 3, mov = 7, def = 2, atk = 4}},
-  {name = "serpentroche", file = "serpentroche.png", stats = {hp = 5, mov = 4, def = 4, atk = 3}},
-  {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 3, mov = 5, def = 2, atk = 6}},
-  {name = "trauma", file = "trauma.png", stats = {hp = 4, mov = 4, def = 3, atk = 5}},
-  {name = "trauma2", file = "trauma2.png", stats = {hp = 5, mov = 4, def = 3, atk = 4}},
-  {name = "trauma3", file = "trauma3.png", stats = {hp = 6, mov = 3, def = 3, atk = 4}},
+  {name = "affamé", file = "affamé.png", stats = {hp = 8, mov = 5, def = 2, atk = 5}},
+  {name = "embourbe", file = "embourbe.png", stats = {hp = 12, mov = 3, def = 5, atk = 2}},
+  {name = "loup1", file = "loup1.png", stats = {hp = 6, mov = 6, def = 2, atk = 5}},
+  {name = "loup2", file = "loup2.png", stats = {hp = 8, mov = 6, def = 2, atk = 4}},
+  {name = "loup3", file = "loup3.png", stats = {hp = 10, mov = 5, def = 2, atk = 4}},
+  {name = "noye", file = "noye.png", stats = {hp = 10, mov = 4, def = 4, atk = 3}},
+  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 6, mov = 7, def = 2, atk = 4}},
+  {name = "serpentroche", file = "serpentroche.png", stats = {hp = 10, mov = 4, def = 4, atk = 3}},
+  {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 6, mov = 5, def = 2, atk = 6}},
+  {name = "trauma", file = "trauma.png", stats = {hp = 8, mov = 4, def = 3, atk = 5}},
+  {name = "trauma2", file = "trauma2.png", stats = {hp = 10, mov = 4, def = 3, atk = 4}},
+  {name = "trauma3", file = "trauma3.png", stats = {hp = 12, mov = 3, def = 3, atk = 4}},
 }
 local enemySpawnCount = 6
 
