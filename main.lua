@@ -804,9 +804,9 @@ function love.draw()
 
   if active then
     local hudText = string.format(
-      "Turn %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
+      "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
       currentTurn,
-      active.name,
+      active.displayClassName or active.className or "Inconnu",
       active.hp,
       active.mov,
       active.def,

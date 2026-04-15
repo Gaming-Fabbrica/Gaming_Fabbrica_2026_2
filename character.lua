@@ -1,6 +1,34 @@
 local Character = {}
 Character.__index = Character
 
+Character.frenchClassNames = {
+  archer = "Archer",
+  atk_mov = "Attaque / Mouvement",
+  counter = "Contreur",
+  free = "Marchand",
+  grab = "Grapineur",
+  healer = "Soigneur",
+  lancer = "Lancier",
+  tactician = "Tacticien",
+  tank = "Tank",
+  ["affamé"] = "Affamé",
+  embourbe = "Embourbé",
+  ["loup1"] = "Loup",
+  ["loup2"] = "Loup Noir",
+  ["loup3"] = "Loup des glaces",
+  noye = "Noyé",
+  ["serpent acrobate"] = "Serpent acrobate",
+  serpentroche = "Serpent de roche",
+  serpentsoleil = "Serpent-soleil",
+  trauma = "Trauma",
+  trauma2 = "Angoisse",
+  trauma3 = "Trauma",
+}
+
+function Character.getFrenchClassName(className)
+  return Character.frenchClassNames[className] or className or "Inconnu"
+end
+
 function Character.rollStats(totalPoints)
   local stats = {
     hp = 2,
@@ -40,6 +68,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local instance = {
     name = name,
     className = resolvedClassName,
+    displayClassName = Character.getFrenchClassName(resolvedClassName),
     spritePath = spritePath,
     sprite = love.graphics.newImage(spritePath),
     hp = resolvedHp,
