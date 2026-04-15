@@ -32,17 +32,14 @@ local enemyAttackPreviewDelay = 0.55
 local enemySkipActionDelay = 0.3
 
 local map = {}
-local obstacleTiles = {
-  {column = 3, row = 2},
-  {column = 3, row = 3},
-  {column = 3, row = 4},
-  {column = 4, row = 2},
-  {column = 4, row = 3},
-  {column = 4, row = 4},
-}
 local obstacles = {}
 local characters = {}
 local currentTurn = 1
+local playerSpawnCount = 5
+local enemySpawnCount = 3
+local treeCount = 56
+local bushCount = 24
+local stoneCount = 16
 
 local availableClasses = {
   {className = "archer", sprites = {"archer_boy", "archer_girl"}},
@@ -54,20 +51,6 @@ local availableClasses = {
   {className = "lancer", sprites = {"lancer_boy", "lancer_girl"}},
   {className = "tactician", sprites = {"tactician_boy", "tactician_girl"}},
   {className = "tank", sprites = {"tank_boy", "tank_girl"}},
-}
-
-local spawnPositions = {
-  {column = 2, row = 3, direction = "right"},
-  {column = 6, row = 2, direction = "right"},
-  {column = 6, row = 5, direction = "right"},
-  {column = 10, row = 3, direction = "left"},
-  {column = 10, row = 6, direction = "left"},
-}
-
-local enemySpawnPositions = {
-  {column = 15, row = 4, direction = "left"},
-  {column = 17, row = 7, direction = "left"},
-  {column = 18, row = 10, direction = "left"},
 }
 
 local function shuffledCopy(list)
@@ -84,11 +67,195 @@ local function shuffledCopy(list)
   return copy
 end
 
-local function loadSprites()
+local function tileKey(column, row)
+  return string.format("%d:%d", column, row)
+end
+
+local function tileDistance(columnA, rowA, columnB, rowB)
+  local xA = (columnA - 1) * 0.75
+  local yA = (rowA - 1) + ((columnA % 2 == 1) and 0.5 or 0)
+  local xB = (columnB - 1) * 0.75
+  local yB = (rowB - 1) + ((columnB % 2 == 1) and 0.5 or 0)
+  local dx = xA - xB
+  local dy = yA - yB
+  return math.sqrt((dx * dx) + (dy * dy))
+end
+
+local function countNearbyTiles(tiles, column, row, maxDistance)
+  local count = 0
+  for _, tileInfo in ipairs(tiles) do
+    if tileDistance(column, row, tileInfo.column, tileInfo.row) <= maxDistance then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+local function takeWeightedCandidate(candidates)
+  local totalWeight = 0
+  for _, candidate in ipairs(candidates) do
+    totalWeight = totalWeight + candidate.weight
+  end
+
+  if totalWeight <= 0 then
+    return nil
+  end
+
+  local roll = math.random() * totalWeight
+  local runningWeight = 0
+  for index, candidate in ipairs(candidates) do
+    runningWeight = runningWeight + candidate.weight
+    if roll <= runningWeight then
+      return table.remove(candidates, index)
+    end
+  end
+
+  return table.remove(candidates)
+end
+
+local function buildCandidates(columnStart, columnEnd, rowStart, rowEnd, blockedLookup, weightFn)
+  local candidates = {}
+  for column = columnStart, columnEnd do
+    for row = rowStart, rowEnd do
+      if not blockedLookup[tileKey(column, row)] then
+        local weight = weightFn(column, row)
+        if weight and weight > 0 then
+          candidates[#candidates + 1] = {
+            column = column,
+            row = row,
+            weight = weight,
+          }
+        end
+      end
+    end
+  end
+  return candidates
+end
+
+local function generateSpawnPositions(count, columnStart, columnEnd, rowStart, rowEnd, anchorColumn, anchorRow, direction)
+  local positions = {}
+  local blockedLookup = {}
+
+  while #positions < count do
+    local candidates = buildCandidates(columnStart, columnEnd, rowStart, rowEnd, blockedLookup, function(column, row)
+      for _, position in ipairs(positions) do
+        if tileDistance(column, row, position.column, position.row) < 2.6 then
+          return 0
+        end
+      end
+
+      local distanceToAnchor = tileDistance(column, row, anchorColumn, anchorRow)
+      return math.max(0.1, 8 - (distanceToAnchor * 1.7))
+    end)
+
+    local candidate = takeWeightedCandidate(candidates)
+    if not candidate then
+      break
+    end
+
+    blockedLookup[tileKey(candidate.column, candidate.row)] = true
+    positions[#positions + 1] = {
+      column = candidate.column,
+      row = candidate.row,
+      direction = direction,
+    }
+  end
+
+  return positions
+end
+
+local function buildReservedLookup(playerSpawnPositions, enemySpawnPositions)
+  local reservedLookup = {}
+  local allSpawnPositions = {}
+
+  for _, position in ipairs(playerSpawnPositions) do
+    allSpawnPositions[#allSpawnPositions + 1] = position
+  end
+  for _, position in ipairs(enemySpawnPositions) do
+    allSpawnPositions[#allSpawnPositions + 1] = position
+  end
+
+  for column = 1, cols do
+    for row = 1, rows do
+      for _, position in ipairs(allSpawnPositions) do
+        if tileDistance(column, row, position.column, position.row) < 1.8 then
+          reservedLookup[tileKey(column, row)] = true
+          break
+        end
+      end
+    end
+  end
+
+  return reservedLookup
+end
+
+local function generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
+  local placements = {}
+  local occupiedLookup = buildReservedLookup(playerSpawnPositions, enemySpawnPositions)
+
+  local treeCandidates = buildCandidates(1, cols, 1, rows, occupiedLookup, function(column, row)
+    local edgeDistance = math.min(column - 1, cols - column, row - 1, rows - row)
+    local edgeBias = math.max(0, 5 - edgeDistance)
+    return 1 + (edgeBias * edgeBias)
+  end)
+
+  for _ = 1, treeCount do
+    local candidate = takeWeightedCandidate(treeCandidates)
+    if not candidate then
+      break
+    end
+    occupiedLookup[tileKey(candidate.column, candidate.row)] = true
+    placements[#placements + 1] = {
+      kind = "tree",
+      column = candidate.column,
+      row = candidate.row,
+    }
+  end
+
+  local bushCandidates = buildCandidates(1, cols, 1, rows, occupiedLookup, function(column, row)
+    local nearbyTrees = countNearbyTiles(placements, column, row, 2.2)
+    return 1 + (nearbyTrees * 4)
+  end)
+
+  for _ = 1, bushCount do
+    local candidate = takeWeightedCandidate(bushCandidates)
+    if not candidate then
+      break
+    end
+    occupiedLookup[tileKey(candidate.column, candidate.row)] = true
+    placements[#placements + 1] = {
+      kind = "bush",
+      column = candidate.column,
+      row = candidate.row,
+    }
+  end
+
+  local stoneCandidates = buildCandidates(1, cols, 1, rows, occupiedLookup, function(column, row)
+    local edgeDistance = math.min(column - 1, cols - column, row - 1, rows - row)
+    return 1 + math.max(0, 3 - edgeDistance)
+  end)
+
+  for _ = 1, stoneCount do
+    local candidate = takeWeightedCandidate(stoneCandidates)
+    if not candidate then
+      break
+    end
+    occupiedLookup[tileKey(candidate.column, candidate.row)] = true
+    placements[#placements + 1] = {
+      kind = "stone",
+      column = candidate.column,
+      row = candidate.row,
+    }
+  end
+
+  return placements
+end
+
+local function loadSprites(playerSpawnPositions, enemySpawnPositions)
   local roster = {}
   local classPool = shuffledCopy(availableClasses)
 
-  for index, spawn in ipairs(spawnPositions) do
+  for index, spawn in ipairs(playerSpawnPositions) do
     local classInfo = classPool[index]
     local spriteName = classInfo.sprites[math.random(#classInfo.sprites)]
     local spritePath = "assets/sprites/heroes/" .. spriteName .. ".png"
@@ -184,6 +351,10 @@ function love.load()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
 
+  local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right")
+  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 16, 6, 14, 13, 10, "left")
+  local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
+
   for c = 1, cols do
     map[c] = {}
     for r = 1, rows do
@@ -191,14 +362,18 @@ function love.load()
     end
   end
   obstacles = {}
-  for _, obstacleTile in ipairs(obstacleTiles) do
-    map[obstacleTile.column][obstacleTile.row] = false
-    obstacles[#obstacles + 1] = Obstacle.randomForTile(obstacleTile.column, obstacleTile.row)
+  for _, obstaclePlacement in ipairs(obstaclePlacements) do
+    map[obstaclePlacement.column][obstaclePlacement.row] = false
+    obstacles[#obstacles + 1] = Obstacle.randomOfKind(
+      obstaclePlacement.kind,
+      obstaclePlacement.column,
+      obstaclePlacement.row
+    )
   end
   battle = Battle.new(cols, rows, map)
   battle:startTurn()
 
-  characters = loadSprites()
+  characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
   battle:setCharacters(characters)
   local screenW, screenH = love.window.getDesktopDimensions(1)
   love.window.setMode(screenW, screenH, {
