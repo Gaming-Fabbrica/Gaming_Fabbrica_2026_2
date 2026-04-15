@@ -97,9 +97,9 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local previousFont = love.graphics.getFont()
   love.graphics.setFont(font)
   local lineHeight = font:getHeight()
-  local menuX = worldX + tileW * 0.6
-  local menuY = worldY - (#entries * lineHeight) * 0.5
-  local rowHeight = lineHeight
+  local menuX = worldX
+  local menuY = worldY + 160
+  local rowHeight = lineHeight + 8
   local padding = 6 * self.scale
   local textWidth = 0
   for _, entry in ipairs(entries) do
@@ -111,31 +111,30 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local screenX = menuX
   local screenY = menuY
   if worldToScreen then
-    screenX, screenY = worldToScreen(menuX, worldY)
-    screenY = screenY - (#entries * lineHeight) * 0.5
+    screenX, screenY = worldToScreen(menuX, menuY)
   end
+  screenX = screenX - (menuWidth * 0.5)
 
-  love.graphics.setColor(0, 0, 0, 0.7)
-  love.graphics.rectangle("fill", screenX, screenY, menuWidth, menuHeight, 4, 4)
-  love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.rectangle("line", screenX, screenY, menuWidth, menuHeight, 4, 4)
+  local radius = 28
+  love.graphics.setColor(1, 1, 1, 0.96)
+  love.graphics.rectangle("fill", screenX, screenY, menuWidth, menuHeight, radius, radius, 24)
+  love.graphics.setColor(0, 0, 0, 0.18)
+  love.graphics.rectangle("line", screenX, screenY, menuWidth, menuHeight, radius, radius, 24)
 
   for i, entry in ipairs(entries) do
     local y = screenY + padding + (i - 1) * rowHeight
     if i == self.selectedIndex then
-      if self:isEntryEnabled(entry) then
-        love.graphics.setColor(1, 1, 0, 1)
-      else
-        love.graphics.setColor(0.5, 0.5, 0.5, 1)
-      end
-      love.graphics.print("> " .. entry, screenX + 8, y)
+      love.graphics.setColor(0, 0, 0, 1)
+      love.graphics.rectangle("fill", screenX + 8, y - 2, menuWidth - 16, rowHeight, 18, 18, 24)
+      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.print(entry, screenX + 16, y + 2)
     else
       if self:isEntryEnabled(entry) then
-        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setColor(0, 0, 0, 1)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print("  " .. entry, screenX + 8, y)
+      love.graphics.print(entry, screenX + 16, y + 2)
     end
   end
   love.graphics.setColor(1, 1, 1, 1)

@@ -37,6 +37,11 @@ local terrainEffectAppearDuration = 0.25
 local battleResult = nil
 local battleResultTimer = 0
 local battleResultDuration = 1.0
+local introFadeAlpha = 0
+local introFadeDuration = 0.8
+local generateSpawnPositions = nil
+local generateObstaclePlacements = nil
+local loadSprites = nil
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -99,6 +104,88 @@ local function beginBattleResult(result)
   end
   battleResult = result
   battleResultTimer = 0
+end
+
+local function resetGame()
+  love.graphics.setBackgroundColor(1, 1, 1)
+  math.randomseed(os.time())
+  battleResult = nil
+  battleResultTimer = 0
+  introFadeAlpha = 1
+  enemyTurnState = nil
+  currentTurn = 1
+  map = {}
+  obstacles = {}
+  characters = {}
+
+  mapBackground = love.graphics.newImage("assets/map_bg2.png")
+  tile = love.graphics.newImage("assets/sprites/hexa.png")
+  cursor = love.graphics.newImage("assets/sprites/cursor.png")
+  moveTile = love.graphics.newImage("assets/sprites/move.png")
+  attackTile = love.graphics.newImage("assets/sprites/attack.png")
+  thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
+  algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
+  splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
+  lifebar = Lifebar.new("assets/sprites/items/heart.png")
+  tileW = tile:getWidth()
+  tileH = tile:getHeight()
+  tileSpacingX = tileW * 0.75
+  tileSpacingY = tileH
+  hudFont = love.graphics.newFont(28)
+  resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", 72)
+  resultPromptFont = love.graphics.newFont(24)
+
+  local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
+  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
+  local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
+
+  for c = 1, cols do
+    map[c] = {}
+    for r = 1, rows do
+      map[c][r] = true
+    end
+  end
+
+  for _, obstaclePlacement in ipairs(obstaclePlacements) do
+    map[obstaclePlacement.column][obstaclePlacement.row] = false
+    obstacles[#obstacles + 1] = Obstacle.randomOfKind(
+      obstaclePlacement.kind,
+      obstaclePlacement.column,
+      obstaclePlacement.row
+    )
+  end
+
+  battle = Battle.new(cols, rows, map)
+  battle:startTurn()
+  characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
+  battle:setCharacters(characters)
+
+  local screenW, screenH = love.window.getDesktopDimensions(1)
+  love.window.setMode(screenW, screenH, {
+    fullscreen = true,
+    fullscreentype = "desktop",
+  })
+  camera = Camera.new(screenW, screenH)
+  camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
+  camera:setBounds(
+    mapBackground:getWidth() * mapBackgroundScale,
+    mapBackground:getHeight() * mapBackgroundScale
+  )
+  local active = characters[currentTurn]
+  if active then
+    local tileX = (active.column - 1) * tileSpacingX
+    local tileY = (active.row - 1) * tileSpacingY
+    if active.column % 2 == 1 then
+      tileY = tileY + (tileH * 0.5)
+    end
+    local focusX = tileX + (tileW * 0.5)
+    local focusY = tileY + (tileH * 0.5)
+    camera:setTarget(focusX, focusY)
+    camera.x = camera.targetX
+    camera.y = camera.targetY
+  end
+
+  Menu:reset()
 end
 
 local function shuffledCopy(list)
@@ -180,7 +267,7 @@ local function buildCandidates(columnStart, columnEnd, rowStart, rowEnd, blocked
   return candidates
 end
 
-local function generateSpawnPositions(count, columnStart, columnEnd, rowStart, rowEnd, anchorColumn, anchorRow, direction, minDistance)
+generateSpawnPositions = function(count, columnStart, columnEnd, rowStart, rowEnd, anchorColumn, anchorRow, direction, minDistance)
   local positions = {}
   local blockedLookup = {}
   local separationDistance = minDistance or 2.6
@@ -238,7 +325,7 @@ local function buildReservedLookup(playerSpawnPositions, enemySpawnPositions)
   return reservedLookup
 end
 
-local function generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
+generateObstaclePlacements = function(playerSpawnPositions, enemySpawnPositions)
   local placements = {}
   local occupiedLookup = buildReservedLookup(playerSpawnPositions, enemySpawnPositions)
 
@@ -300,7 +387,7 @@ local function generateObstaclePlacements(playerSpawnPositions, enemySpawnPositi
   return placements
 end
 
-local function loadSprites(playerSpawnPositions, enemySpawnPositions)
+loadSprites = function(playerSpawnPositions, enemySpawnPositions)
   local roster = {}
   local classPool = shuffledCopy(availableClasses)
   local enemyPool = shuffledCopy(enemyArchetypes)
@@ -388,67 +475,14 @@ local function advanceTurn(activeCharacter)
 end
 
 function love.load()
-  love.graphics.setBackgroundColor(1, 1, 1)
-  math.randomseed(os.time())
-  battleResult = nil
-  battleResultTimer = 0
-  enemyTurnState = nil
-
-  mapBackground = love.graphics.newImage("assets/map_bg2.png")
-  tile = love.graphics.newImage("assets/sprites/hexa.png")
-  cursor = love.graphics.newImage("assets/sprites/cursor.png")
-  moveTile = love.graphics.newImage("assets/sprites/move.png")
-  attackTile = love.graphics.newImage("assets/sprites/attack.png")
-  thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
-  algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
-  splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
-  lifebar = Lifebar.new("assets/sprites/items/heart.png")
-  tileW = tile:getWidth()
-  tileH = tile:getHeight()
-  tileSpacingX = tileW * 0.75
-  tileSpacingY = tileH
-  hudFont = love.graphics.newFont(28)
-  resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", 72)
-  resultPromptFont = love.graphics.newFont(24)
-
-  local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
-  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
-  local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
-
-  for c = 1, cols do
-    map[c] = {}
-    for r = 1, rows do
-      map[c][r] = true
-    end
-  end
-  obstacles = {}
-  for _, obstaclePlacement in ipairs(obstaclePlacements) do
-    map[obstaclePlacement.column][obstaclePlacement.row] = false
-    obstacles[#obstacles + 1] = Obstacle.randomOfKind(
-      obstaclePlacement.kind,
-      obstaclePlacement.column,
-      obstaclePlacement.row
-    )
-  end
-  battle = Battle.new(cols, rows, map)
-  battle:startTurn()
-
-  characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
-  battle:setCharacters(characters)
-  local screenW, screenH = love.window.getDesktopDimensions(1)
-  love.window.setMode(screenW, screenH, {
-    fullscreen = true,
-    fullscreentype = "desktop",
-  })
-  camera = Camera.new(screenW, screenH)
-  camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
-  camera:setBounds(
-    mapBackground:getWidth() * mapBackgroundScale,
-    mapBackground:getHeight() * mapBackgroundScale
-  )
+  resetGame()
 end
 
 function love.update(dt)
+  if introFadeAlpha > 0 then
+    introFadeAlpha = math.max(0, introFadeAlpha - (dt / introFadeDuration))
+  end
+
   if battleResult then
     battleResultTimer = math.min(battleResultDuration, battleResultTimer + dt)
     return
@@ -818,15 +852,38 @@ function love.draw()
       battle and battle:getTurnPhase() or "move",
       Menu:selectedAction()
     )
+    local font = love.graphics.getFont()
+    local paddingX = 18
+    local paddingY = 12
+    local boxX = 10
+    local boxY = 10
+    local boxWidth = font:getWidth(hudText) + (paddingX * 2)
+    local boxHeight = font:getHeight() + (paddingY * 2)
+    local radius = 18
+
+    love.graphics.setColor(1, 1, 1, 0.96)
+    love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
+    love.graphics.setColor(0, 0, 0, 0.18)
+    love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
     love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.print(hudText, 12, 12)
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print(hudText, 10, 10)
+    love.graphics.print(hudText, boxX + paddingX, boxY + paddingY)
   else
+    local font = love.graphics.getFont()
+    local text = "No active character"
+    local paddingX = 18
+    local paddingY = 12
+    local boxX = 10
+    local boxY = 10
+    local boxWidth = font:getWidth(text) + (paddingX * 2)
+    local boxHeight = font:getHeight() + (paddingY * 2)
+    local radius = 18
+
+    love.graphics.setColor(1, 1, 1, 0.96)
+    love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
+    love.graphics.setColor(0, 0, 0, 0.18)
+    love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
     love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.print("No active character", 12, 12)
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("No active character", 10, 10)
+    love.graphics.print(text, boxX + paddingX, boxY + paddingY)
   end
   love.graphics.setColor(1, 1, 1)
   love.graphics.setFont(previousFont)
@@ -875,6 +932,14 @@ function love.draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(previousFont)
   end
+
+  if introFadeAlpha > 0 then
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    love.graphics.setColor(1, 1, 1, introFadeAlpha)
+    love.graphics.rectangle("fill", 0, 0, width, height)
+    love.graphics.setColor(1, 1, 1, 1)
+  end
 end
 
 function love.keypressed(key)
@@ -884,7 +949,7 @@ function love.keypressed(key)
     love.event.quit()
   elseif battleResult then
     if key == "return" or key == "kpenter" or key == "enter" then
-      love.load()
+      resetGame()
     end
     return
   elseif active and active.team ~= "player" then
