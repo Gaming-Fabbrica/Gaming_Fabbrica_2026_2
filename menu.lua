@@ -106,8 +106,8 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   love.graphics.setFont(font)
   local lineHeight = font:getHeight()
   local menuX = worldX
-  local menuY = worldY + 160
-  local rowHeight = lineHeight + 8
+  local menuY = worldY + 180
+  local rowHeight = lineHeight + 14
   local padding = 6 * self.scale
   local leftPadding = 26
   local rightPadding = 18
@@ -125,7 +125,7 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   end
   screenX = screenX - (menuWidth * 0.5)
 
-  local radius = 28
+  local radius = 30
   love.graphics.setColor(1, 1, 1, 0.96)
   love.graphics.rectangle("fill", screenX, screenY, menuWidth, menuHeight, radius, radius, 24)
   love.graphics.setColor(0, 0, 0, 0.18)
@@ -135,16 +135,17 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
     local y = screenY + padding + (i - 1) * rowHeight
     if i == self.selectedIndex then
       love.graphics.setColor(0, 0, 0, 1)
-      love.graphics.rectangle("fill", screenX + 12, y - 2, menuWidth - 24, rowHeight, 18, 18, 24)
+      local entryRadius = math.floor(rowHeight * 0.5)
+      love.graphics.rectangle("fill", screenX + 12, y - 2, menuWidth - 24, rowHeight, entryRadius, entryRadius, 24)
       love.graphics.setColor(1, 1, 1, 1)
-      love.graphics.print(entry, screenX + leftPadding, y + 2)
+      love.graphics.print(entry, screenX + leftPadding, y + 5)
     else
       if self:isEntryEnabled(entry) then
         love.graphics.setColor(0, 0, 0, 1)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print(entry, screenX + leftPadding, y + 2)
+      love.graphics.print(entry, screenX + leftPadding, y + 5)
     end
   end
   love.graphics.setColor(1, 1, 1, 1)
