@@ -3,7 +3,7 @@ Obstacle.__index = Obstacle
 
 local TREE_SWAY_SPEED = 1.15
 local TREE_SWAY_ANGLE = 0.04
-local TREE_SCALE = 2.0
+local TREE_SCALE = 2.5
 local STONE_SCALE = 0.9075
 local STONE_OFFSET_Y = -48
 local TREE_PIVOT_RATIO = 0.9

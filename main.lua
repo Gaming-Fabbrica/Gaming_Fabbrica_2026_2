@@ -19,7 +19,7 @@ local cursor = nil
 local moveTile = nil
 local attackTile = nil
 
-local characterScale = 1.0
+local characterScale = 1.1
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
 local camera = nil
@@ -820,9 +820,9 @@ function love.draw()
     local boxY = 10
     local boxWidth = font:getWidth(hudText) + (paddingX * 2)
     local boxHeight = font:getHeight() + (paddingY * 2)
-    local radius = 18
+    local radius = math.floor(boxHeight * 0.5)
 
-    love.graphics.setColor(1, 1, 1, 0.96)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
     love.graphics.setColor(0, 0, 0, 0.18)
     love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
@@ -837,9 +837,9 @@ function love.draw()
     local boxY = 10
     local boxWidth = font:getWidth(text) + (paddingX * 2)
     local boxHeight = font:getHeight() + (paddingY * 2)
-    local radius = 18
+    local radius = math.floor(boxHeight * 0.5)
 
-    love.graphics.setColor(1, 1, 1, 0.96)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
     love.graphics.setColor(0, 0, 0, 0.18)
     love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
