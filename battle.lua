@@ -653,6 +653,47 @@ function Battle:selectAttackTargetInDirection(originColumn, originRow, key)
   return bestColumn, bestRow
 end
 
+function Battle:selectOpponentAttackTargetInDirection(activeCharacter, originColumn, originRow, key)
+  local originX, originY = self:getGridVector(originColumn, originRow)
+  local bestColumn = originColumn
+  local bestRow = originRow
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, character in ipairs(self:getOpponentsOf(activeCharacter)) do
+    if self:isAttackable(character.column, character.row) then
+      local targetX, targetY = self:getGridVector(character.column, character.row)
+      local dx = targetX - originX
+      local dy = targetY - originY
+      local primary = nil
+      local secondary = nil
+
+      if key == "left" and dx < 0 then
+        primary = -dx
+        secondary = math.abs(dy)
+      elseif key == "right" and dx > 0 then
+        primary = dx
+        secondary = math.abs(dy)
+      elseif key == "up" and dy < 0 then
+        primary = -dy
+        secondary = math.abs(dx)
+      elseif key == "down" and dy > 0 then
+        primary = dy
+        secondary = math.abs(dx)
+      end
+
+      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = character.column
+        bestRow = character.row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
 function Battle:startAttackSelection(activeCharacter)
   if self.turnPhase ~= "action" then
     return false
@@ -930,7 +971,8 @@ function Battle:moveTargetByKey(key)
 end
 
 function Battle:moveAttackTargetByKey(activeCharacter, key)
-  self.attackTarget.column, self.attackTarget.row = self:selectAttackTargetInDirection(
+  self.attackTarget.column, self.attackTarget.row = self:selectOpponentAttackTargetInDirection(
+    activeCharacter,
     self.attackTarget.column,
     self.attackTarget.row,
     key
@@ -1088,7 +1130,7 @@ function Battle:confirmAttack(activeCharacter)
   end
 
   local target = self:getCharacterAt(self.attackTarget.column, self.attackTarget.row, activeCharacter)
-  if not target then
+  if not target or not self:areOpponents(activeCharacter, target) then
     return false
   end
 
