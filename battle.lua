@@ -104,6 +104,20 @@ function Battle:getCharacterAt(column, row, ignoreCharacter)
   return nil
 end
 
+function Battle:areOpponents(a, b)
+  return a and b and a.team ~= b.team
+end
+
+function Battle:getOpponentsOf(character)
+  local opponents = {}
+  for _, other in ipairs(self.characters) do
+    if self:areOpponents(character, other) then
+      opponents[#opponents + 1] = other
+    end
+  end
+  return opponents
+end
+
 function Battle:isPassable(column, row, ignoreCharacter)
   if not self.map[column] or not self.map[column][row] then
     return false
@@ -261,12 +275,21 @@ function Battle:getTilesInRange(startColumn, startRow, maxRange)
   return tiles
 end
 
-function Battle:getReachableTiles(startColumn, startRow, maxMoves)
+function Battle:getTileDistance(startColumn, startRow, targetColumn, targetRow)
+  if startColumn == targetColumn and startRow == targetRow then
+    return 0
+  end
+  local tiles = self:getTilesInRange(startColumn, startRow, self.cols * self.rows)
+  return tiles[targetColumn .. "," .. targetRow]
+end
+
+function Battle:getReachableTiles(startColumn, startRow, maxMoves, ignoreCharacter)
   local reachable = {}
   if maxMoves < 1 then
     return reachable
   end
-  if not self:isWalkableStep(startColumn, startRow, self.movingCharacter) then
+  local ignored = ignoreCharacter or self.movingCharacter
+  if not self:isWalkableStep(startColumn, startRow, ignored) then
     return reachable
   end
 
@@ -295,7 +318,7 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves)
         local nextKey = nextColumn .. "," .. nextRow
 
         if
-          self:isWalkableStep(nextColumn, nextRow, self.movingCharacter)
+          self:isWalkableStep(nextColumn, nextRow, ignored)
           and not visited[nextKey]
         then
           visited[nextKey] = distance + 1
@@ -400,7 +423,7 @@ function Battle:getAttackableTiles(activeCharacter)
     activeCharacter.attackRange or 1
   )
 
-  for _, character in ipairs(self.characters) do
+  for _, character in ipairs(self:getOpponentsOf(activeCharacter)) do
     if character ~= activeCharacter then
       local key = character.column .. "," .. character.row
       if tilesInRange[key] then
@@ -466,7 +489,7 @@ function Battle:startAttackSelection(activeCharacter)
   )
   local nearestDistance = nil
 
-  for _, character in ipairs(self.characters) do
+  for _, character in ipairs(self:getOpponentsOf(activeCharacter)) do
     if character ~= activeCharacter then
       local key = character.column .. "," .. character.row
       local distance = tilesInRange[key]
@@ -486,15 +509,65 @@ function Battle:startAttackSelection(activeCharacter)
   return false
 end
 
+function Battle:getBestMoveTileFor(activeCharacter)
+  local bestColumn = activeCharacter.column
+  local bestRow = activeCharacter.row
+  local bestScore = nil
+  local bestTargetDistance = nil
+  local reachable = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov, activeCharacter)
+  local opponents = self:getOpponentsOf(activeCharacter)
+
+  local function evaluateTile(column, row)
+    local targetDistance = nil
+    for _, opponent in ipairs(opponents) do
+      local distance = self:getTileDistance(column, row, opponent.column, opponent.row)
+      if distance and (targetDistance == nil or distance < targetDistance) then
+        targetDistance = distance
+      end
+    end
+
+    if not targetDistance then
+      return
+    end
+
+    local score = math.max(0, targetDistance - (activeCharacter.attackRange or 1))
+    if
+      bestScore == nil
+      or score < bestScore
+      or (score == bestScore and targetDistance < bestTargetDistance)
+    then
+      bestScore = score
+      bestTargetDistance = targetDistance
+      bestColumn = column
+      bestRow = row
+    end
+  end
+
+  evaluateTile(activeCharacter.column, activeCharacter.row)
+  for key in pairs(reachable) do
+    local commaIndex = key:find(",")
+    local column = tonumber(key:sub(1, commaIndex - 1))
+    local row = tonumber(key:sub(commaIndex + 1))
+    evaluateTile(column, row)
+  end
+
+  return bestColumn, bestRow
+end
+
 function Battle:startMoveSelection(activeCharacter)
   if self.turnPhase ~= "move" then
     return
   end
   self.movingCharacter = activeCharacter
-  self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov)
+  self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov, activeCharacter)
   self.moveTarget.column = activeCharacter.column
   self.moveTarget.row = activeCharacter.row
   self.mode = "move"
+end
+
+function Battle:setMoveTarget(column, row)
+  self.moveTarget.column = column
+  self.moveTarget.row = row
 end
 
 function Battle:moveTargetByKey(key)

@@ -32,7 +32,7 @@ function Character.attackRangeForClass(className)
   return 1
 end
 
-function Character.new(name, spritePath, column, row, stats, direction, className)
+function Character.new(name, spritePath, column, row, stats, direction, className, team)
   local resolvedStats = stats or Character.rollStats(16)
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
@@ -50,6 +50,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     column = column,
     row = row,
     direction = direction or "right",
+    team = team or "player",
   }
   return setmetatable(instance, Character)
 end

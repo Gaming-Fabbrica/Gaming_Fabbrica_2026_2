@@ -23,6 +23,7 @@ local characterRightOffsetX = 0
 local camera = nil
 local battle = nil
 local lifebar = nil
+local enemyTurnState = nil
 
 local map = {}
 local obstacleTiles = {
@@ -56,6 +57,12 @@ local spawnPositions = {
   {column = 10, row = 6, direction = "left"},
 }
 
+local enemySpawnPositions = {
+  {column = 15, row = 4, direction = "left"},
+  {column = 17, row = 7, direction = "left"},
+  {column = 18, row = 10, direction = "left"},
+}
+
 local function shuffledCopy(list)
   local copy = {}
   for index, value in ipairs(list) do
@@ -85,7 +92,21 @@ local function loadSprites()
       spawn.row,
       Character.rollStats(16),
       spawn.direction,
-      classInfo.className
+      classInfo.className,
+      "player"
+    )
+  end
+
+  for index, spawn in ipairs(enemySpawnPositions) do
+    roster[#roster + 1] = Character.new(
+      "trauma_" .. index,
+      "assets/sprites/mobs/trauma.png",
+      spawn.column,
+      spawn.row,
+      Character.rollStats(16),
+      spawn.direction,
+      "trauma",
+      "enemy"
     )
   end
 
@@ -103,6 +124,11 @@ end
 
 local function getActiveCharacter()
   return characters[currentTurn]
+end
+
+local function isPlayerTurn()
+  local active = getActiveCharacter()
+  return active and active.team == "player"
 end
 
 local function advanceTurn(activeCharacter)
@@ -132,6 +158,7 @@ local function advanceTurn(activeCharacter)
   if battle then
     battle:startTurn()
   end
+  enemyTurnState = nil
   Menu:reset()
 end
 
@@ -184,6 +211,57 @@ function love.update(dt)
   end
 
   local active = getActiveCharacter()
+  if active and battle and active.team == "enemy" and not battle:isAnimating() then
+    if battle:getTurnPhase() == "move" then
+      if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
+        local targetColumn, targetRow = battle:getBestMoveTileFor(active)
+        battle:startMoveSelection(active)
+        battle:setMoveTarget(targetColumn, targetRow)
+        enemyTurnState = {
+          character = active,
+          phase = "move_preview",
+          timer = 0.45,
+          targetColumn = targetColumn,
+          targetRow = targetRow,
+        }
+      else
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          if enemyTurnState.targetColumn ~= active.column or enemyTurnState.targetRow ~= active.row then
+            if not battle:confirmMove(active) then
+              battle:cancelMoveMode()
+              battle:startActionPhase()
+            end
+          else
+            battle:cancelMoveMode()
+            battle:startActionPhase()
+          end
+          enemyTurnState = nil
+        end
+      end
+    elseif battle:getTurnPhase() == "action" then
+      if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "attack_preview" then
+        if battle:startAttackSelection(active) then
+          enemyTurnState = {
+            character = active,
+            phase = "attack_preview",
+            timer = 0.25,
+          }
+        else
+          advanceTurn(active)
+        end
+      else
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          battle:confirmAttack(active)
+          enemyTurnState = nil
+        end
+      end
+    end
+  elseif enemyTurnState and (not active or active.team ~= "enemy") then
+    enemyTurnState = nil
+  end
+
   if active then
     local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
@@ -244,7 +322,7 @@ function love.draw()
   local attackAnimation = battle and battle:getAttackAnimation() or nil
   if attackAnimation then
     hoveredCharacter = attackAnimation.target
-  elseif active and not (battle and battle:isAnimating()) then
+  elseif active and active.team == "player" and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
     if battle and (battle:isMoveMode() or battle:isAttackMode()) then
@@ -280,7 +358,7 @@ function love.draw()
     end
   end
 
-  if active and not (battle and battle:isAnimating()) then
+  if active and active.team == "player" and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
     if battle and (battle:isMoveMode() or battle:isAttackMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
@@ -324,7 +402,7 @@ function love.draw()
   end
 
   local isAnimating = battle and battle:isAnimating()
-  if active and not isAnimating then
+  if active and active.team == "player" and not isAnimating then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
@@ -361,6 +439,8 @@ function love.keypressed(key)
   local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
+  elseif active and active.team ~= "player" then
+    -- disable player input during enemy turns
   elseif battle and battle:isAnimating() then
     -- disable input during animations
   elseif gameMode == "move" then
