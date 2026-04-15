@@ -25,6 +25,11 @@ local battle = nil
 local lifebar = nil
 local enemyTurnState = nil
 
+local enemyMovePreviewDelay = 0.9
+local enemyPostMoveDelay = 0.45
+local enemyAttackPreviewDelay = 0.55
+local enemySkipActionDelay = 0.3
+
 local map = {}
 local obstacleTiles = {
   {column = 3, row = 2},
@@ -220,7 +225,7 @@ function love.update(dt)
         enemyTurnState = {
           character = active,
           phase = "move_preview",
-          timer = 0.45,
+          timer = enemyMovePreviewDelay,
           targetColumn = targetColumn,
           targetRow = targetRow,
         }
@@ -228,33 +233,62 @@ function love.update(dt)
         enemyTurnState.timer = enemyTurnState.timer - dt
         if enemyTurnState.timer <= 0 then
           if enemyTurnState.targetColumn ~= active.column or enemyTurnState.targetRow ~= active.row then
-            if not battle:confirmMove(active) then
+            if battle:confirmMove(active) then
+              enemyTurnState = {
+                character = active,
+                phase = "post_move_wait",
+                timer = enemyPostMoveDelay,
+              }
+            else
               battle:cancelMoveMode()
               battle:startActionPhase()
+              enemyTurnState = {
+                character = active,
+                phase = "post_move_wait",
+                timer = enemyPostMoveDelay,
+              }
             end
           else
             battle:cancelMoveMode()
             battle:startActionPhase()
+            enemyTurnState = {
+              character = active,
+              phase = "post_move_wait",
+              timer = enemyPostMoveDelay,
+            }
           end
-          enemyTurnState = nil
         end
       end
     elseif battle:getTurnPhase() == "action" then
-      if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "attack_preview" then
-        if battle:startAttackSelection(active) then
-          enemyTurnState = {
-            character = active,
-            phase = "attack_preview",
-            timer = 0.25,
-          }
-        else
+      if enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "post_move_wait" then
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          enemyTurnState = nil
+        end
+      elseif enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "end_turn_wait" then
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
           advanceTurn(active)
         end
-      else
+      elseif enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "attack_preview" then
         enemyTurnState.timer = enemyTurnState.timer - dt
         if enemyTurnState.timer <= 0 then
           battle:confirmAttack(active)
           enemyTurnState = nil
+        end
+      elseif not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "attack_preview" then
+        if battle:startAttackSelection(active) then
+          enemyTurnState = {
+            character = active,
+            phase = "attack_preview",
+            timer = enemyAttackPreviewDelay,
+          }
+        else
+          enemyTurnState = {
+            character = active,
+            phase = "end_turn_wait",
+            timer = enemySkipActionDelay,
+          }
         end
       end
     end
