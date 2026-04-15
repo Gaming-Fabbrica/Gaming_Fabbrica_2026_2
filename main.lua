@@ -707,12 +707,12 @@ function love.draw()
       local x, y = gridToScreen(c, r)
       love.graphics.draw(tile, x, y)
       if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
-        local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(moveTile, x, y)
         love.graphics.setColor(1, 1, 1, 1)
       elseif active and battle and battle:isAttackMode() and battle:isAttackable(c, r) then
-        local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(attackTile, x, y)
         love.graphics.setColor(1, 1, 1, 1)
@@ -804,15 +804,14 @@ function love.draw()
 
   if active then
     local hudText = string.format(
-      "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s  Action: %s",
+      "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
       currentTurn,
       active.displayClassName or active.className or "Inconnu",
       active.hp,
       active.mov,
       active.def,
       active.atk,
-      battle and battle:getTurnPhase() or "move",
-      Menu:selectedAction()
+      battle and battle:getTurnPhase() or "move"
     )
     local font = love.graphics.getFont()
     local paddingX = 18
