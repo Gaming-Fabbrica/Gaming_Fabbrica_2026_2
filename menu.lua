@@ -111,8 +111,7 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local screenX = menuX
   local screenY = menuY
   if worldToScreen then
-    screenX, screenY = worldToScreen(worldX, worldY)
-    screenX = screenX + tileW * 0.6
+    screenX, screenY = worldToScreen(menuX, worldY)
     screenY = screenY - (#entries * lineHeight) * 0.5
   end
 

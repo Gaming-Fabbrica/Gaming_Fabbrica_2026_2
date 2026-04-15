@@ -11,10 +11,19 @@ function Camera.new(viewWidth, viewHeight)
     viewHeight = viewHeight,
     boundsWidth = nil,
     boundsHeight = nil,
+    zoom = 0.8,
     smoothDiv = 8,
     epsilon = 0.2,
   }
   return setmetatable(self, Camera)
+end
+
+function Camera:getWorldViewWidth()
+  return self.viewWidth / self.zoom
+end
+
+function Camera:getWorldViewHeight()
+  return self.viewHeight / self.zoom
 end
 
 function Camera:clampPosition(x, y)
@@ -22,8 +31,8 @@ function Camera:clampPosition(x, y)
     return x, y
   end
 
-  local maxX = math.max(0, self.boundsWidth - self.viewWidth)
-  local maxY = math.max(0, self.boundsHeight - self.viewHeight)
+  local maxX = math.max(0, self.boundsWidth - self:getWorldViewWidth())
+  local maxY = math.max(0, self.boundsHeight - self:getWorldViewHeight())
 
   return math.max(0, math.min(maxX, x)), math.max(0, math.min(maxY, y))
 end
@@ -43,8 +52,8 @@ function Camera:setBounds(boundsWidth, boundsHeight)
 end
 
 function Camera:setTarget(centerX, centerY)
-  self.targetX = centerX - (self.viewWidth * 0.5)
-  self.targetY = centerY - (self.viewHeight * 0.5)
+  self.targetX = centerX - (self:getWorldViewWidth() * 0.5)
+  self.targetY = centerY - (self:getWorldViewHeight() * 0.5)
   self.targetX, self.targetY = self:clampPosition(self.targetX, self.targetY)
 end
 
@@ -65,11 +74,12 @@ function Camera:update()
 end
 
 function Camera:apply()
+  love.graphics.scale(self.zoom, self.zoom)
   love.graphics.translate(-self.x, -self.y)
 end
 
 function Camera:worldToScreen(x, y)
-  return x - self.x, y - self.y
+  return (x - self.x) * self.zoom, (y - self.y) * self.zoom
 end
 
 return Camera
