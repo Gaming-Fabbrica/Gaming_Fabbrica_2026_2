@@ -36,6 +36,7 @@ local battleResultTimer = 0
 local battleResultDuration = 1.0
 local introFadeAlpha = 0
 local introFadeDuration = 0.8
+local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
 local loadSprites = nil
@@ -157,11 +158,18 @@ local function resetGame()
   characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
   battle:setCharacters(characters)
 
-  local screenW, screenH = love.window.getDesktopDimensions(1)
-  love.window.setMode(screenW, screenH, {
-    fullscreen = true,
-    fullscreentype = "desktop",
-  })
+  local screenW = love.graphics.getWidth()
+  local screenH = love.graphics.getHeight()
+  if not windowInitialized then
+    screenW, screenH = love.window.getDesktopDimensions(1)
+    love.window.setMode(screenW, screenH, {
+      fullscreen = true,
+      fullscreentype = "desktop",
+    })
+    screenW = love.graphics.getWidth()
+    screenH = love.graphics.getHeight()
+    windowInitialized = true
+  end
   camera = Camera.new(screenW, screenH)
   camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
   camera:setBounds(
@@ -487,6 +495,10 @@ function love.update(dt)
 
   if battle then
     battle:update(dt)
+    local screenShake = battle:consumeScreenShake()
+    if screenShake and camera then
+      camera:startShake(screenShake.duration, screenShake.amplitude)
+    end
     local completedActionCharacter = battle:consumeCompletedActionCharacter()
     if completedActionCharacter then
       advanceTurn(completedActionCharacter)

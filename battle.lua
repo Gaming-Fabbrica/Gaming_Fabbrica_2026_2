@@ -22,6 +22,7 @@ function Battle.new(cols, rows, map)
     deathAnimation = nil,
     deathQueue = nil,
     completedActionCharacter = nil,
+    pendingScreenShake = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
     attackWindupDuration = 0.12,
@@ -33,6 +34,19 @@ function Battle.new(cols, rows, map)
     damagePopupDuration = 0.7,
   }
   return setmetatable(instance, Battle)
+end
+
+function Battle:triggerScreenShake(duration, amplitude)
+  self.pendingScreenShake = {
+    duration = duration or 0.22,
+    amplitude = amplitude or 10,
+  }
+end
+
+function Battle:consumeScreenShake()
+  local shake = self.pendingScreenShake
+  self.pendingScreenShake = nil
+  return shake
 end
 
 function Battle:setMap(map)
@@ -1129,17 +1143,27 @@ function Battle:update(dt)
     if not animation.applied and animation.timer >= self.attackWindupDuration + self.attackLungeDuration then
       animation.applied = true
       if animation.kind == "splash" then
+        local hitPlayer = false
         for _, target in ipairs(animation.targets) do
           local damage = self:calculateDamage(animation.attacker, target)
           target.hp = target.hp - damage
           self:addDamagePopup(target.column, target.row, damage)
+          if target.team == "player" then
+            hitPlayer = true
+          end
           if target.hp <= 0 then
             target.hp = 0
             animation.defeatedTargets[#animation.defeatedTargets + 1] = target
           end
         end
+        if hitPlayer then
+          self:triggerScreenShake(0.24, 14)
+        end
       else
         animation.target.hp = animation.target.hp - animation.damage
+        if animation.target.team == "player" then
+          self:triggerScreenShake(0.24, 14)
+        end
         if animation.target.hp <= 0 then
           animation.target.hp = 0
           animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.target

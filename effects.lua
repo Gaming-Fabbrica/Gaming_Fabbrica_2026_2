@@ -97,9 +97,11 @@ function Effects:getMovementCost(column, row)
 end
 
 function Effects:startHealAnimation(healer, target)
+  local healAmount = love.math.random(1, 3)
   self.healAnimation = {
     healer = healer,
     target = target,
+    healAmount = healAmount,
     timer = 0,
     duration = 1.0,
     applied = false,
@@ -128,7 +130,10 @@ function Effects:updateHealAnimation(dt)
 
   if not animation.applied and animation.timer >= animation.duration * 0.18 then
     animation.applied = true
-    animation.target.hp = math.min(animation.target.maxHp or animation.target.hp, animation.target.hp + 1)
+    animation.target.hp = math.min(
+      animation.target.maxHp or animation.target.hp,
+      animation.target.hp + animation.healAmount
+    )
   end
 
   if animation.timer >= animation.duration then

@@ -14,6 +14,11 @@ function Camera.new(viewWidth, viewHeight)
     zoom = 0.8,
     smoothDiv = 8,
     epsilon = 0.2,
+    shakeTimer = 0,
+    shakeDuration = 0,
+    shakeAmplitude = 0,
+    shakeOffsetX = 0,
+    shakeOffsetY = 0,
   }
   return setmetatable(self, Camera)
 end
@@ -71,11 +76,28 @@ function Camera:update()
   if math.abs(self.targetY - self.y) < self.epsilon then
     self.y = self.targetY
   end
+
+  if self.shakeTimer > 0 then
+    self.shakeTimer = math.max(0, self.shakeTimer - love.timer.getDelta())
+    local ratio = self.shakeDuration > 0 and (self.shakeTimer / self.shakeDuration) or 0
+    local amplitude = self.shakeAmplitude * ratio
+    self.shakeOffsetX = (love.math.random() * 2 - 1) * amplitude
+    self.shakeOffsetY = (love.math.random() * 2 - 1) * amplitude
+  else
+    self.shakeOffsetX = 0
+    self.shakeOffsetY = 0
+  end
+end
+
+function Camera:startShake(duration, amplitude)
+  self.shakeDuration = duration or 0.22
+  self.shakeTimer = self.shakeDuration
+  self.shakeAmplitude = amplitude or 10
 end
 
 function Camera:apply()
   love.graphics.scale(self.zoom, self.zoom)
-  love.graphics.translate(-self.x, -self.y)
+  love.graphics.translate(-(self.x - self.shakeOffsetX), -(self.y - self.shakeOffsetY))
 end
 
 function Camera:worldToScreen(x, y)

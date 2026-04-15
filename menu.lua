@@ -109,11 +109,13 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local menuY = worldY + 160
   local rowHeight = lineHeight + 8
   local padding = 6 * self.scale
+  local leftPadding = 26
+  local rightPadding = 18
   local textWidth = 0
   for _, entry in ipairs(entries) do
     textWidth = math.max(textWidth, font:getWidth("> " .. entry))
   end
-  local menuWidth = textWidth + (padding * 2) + 8
+  local menuWidth = textWidth + leftPadding + rightPadding + (padding * 2)
   local menuHeight = (#entries * rowHeight) + (padding * 2)
 
   local screenX = menuX
@@ -133,16 +135,16 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
     local y = screenY + padding + (i - 1) * rowHeight
     if i == self.selectedIndex then
       love.graphics.setColor(0, 0, 0, 1)
-      love.graphics.rectangle("fill", screenX + 8, y - 2, menuWidth - 16, rowHeight, 18, 18, 24)
+      love.graphics.rectangle("fill", screenX + 12, y - 2, menuWidth - 24, rowHeight, 18, 18, 24)
       love.graphics.setColor(1, 1, 1, 1)
-      love.graphics.print(entry, screenX + 16, y + 2)
+      love.graphics.print(entry, screenX + leftPadding, y + 2)
     else
       if self:isEntryEnabled(entry) then
         love.graphics.setColor(0, 0, 0, 1)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print(entry, screenX + 16, y + 2)
+      love.graphics.print(entry, screenX + leftPadding, y + 2)
     end
   end
   love.graphics.setColor(1, 1, 1, 1)
