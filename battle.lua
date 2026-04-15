@@ -416,23 +416,11 @@ function Battle:updateCharacterDirection(character, fromColumn, toColumn)
 end
 
 function Battle:getAttackableTiles(activeCharacter)
-  local attackable = {}
-  local tilesInRange = self:getTilesInRange(
+  return self:getTilesInRange(
     activeCharacter.column,
     activeCharacter.row,
     activeCharacter.attackRange or 1
   )
-
-  for _, character in ipairs(self:getOpponentsOf(activeCharacter)) do
-    if character ~= activeCharacter then
-      local key = character.column .. "," .. character.row
-      if tilesInRange[key] then
-        attackable[key] = true
-      end
-    end
-  end
-
-  return attackable
 end
 
 function Battle:selectAttackTargetInDirection(originColumn, originRow, key)
