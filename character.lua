@@ -120,10 +120,28 @@ function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
     return nil
   end
 
+  local strikeDuration =
+    battle.attackWindupDuration
+    + battle.attackLungeDuration
+    + battle.attackImpactDuration
+    + battle.attackRetreatDuration
+    + battle.attackHoldDuration
+  local currentAttacker = animation.attacker
+  local currentTarget = animation.target
+  local timer = animation.timer
+  local applied = animation.applied
+
+  if animation.counterDamage and timer >= strikeDuration then
+    currentAttacker = animation.target
+    currentTarget = animation.attacker
+    timer = timer - strikeDuration
+    applied = animation.counterApplied
+  end
+
   local baseX, baseY = gridToScreen(character.column, character.row)
 
-  if character == animation.attacker then
-    local targetX, targetY = gridToScreen(animation.target.column, animation.target.row)
+  if character == currentAttacker then
+    local targetX, targetY = gridToScreen(currentTarget.column, currentTarget.row)
     local dx = targetX - baseX
     local dy = targetY - baseY
     local distance = math.sqrt((dx * dx) + (dy * dy))
@@ -136,7 +154,6 @@ function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
     local windupOffset = math.min(tileW * 0.18, distance * 0.18)
     local maxOffset = math.min(tileW * 0.42, distance * 0.42)
     local offset = 0
-    local timer = animation.timer
 
     if timer < battle.attackWindupDuration then
       offset = -windupOffset * (timer / battle.attackWindupDuration)
@@ -154,17 +171,17 @@ function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
     return baseX + (directionX * offset), baseY + (directionY * offset), 0
   end
 
-  if character == animation.target then
-    local attackerX, attackerY = gridToScreen(animation.attacker.column, animation.attacker.row)
+  if character == currentTarget then
+    local attackerX, attackerY = gridToScreen(currentAttacker.column, currentAttacker.row)
     local dx = baseX - attackerX
     local dy = baseY - attackerY
     local distance = math.sqrt((dx * dx) + (dy * dy))
     local directionX = distance > 0 and (dx / distance) or 1
     local directionY = distance > 0 and (dy / distance) or 0
-    local shakeTimer = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+    local shakeTimer = timer - battle.attackWindupDuration - battle.attackLungeDuration
     local shakeDuration = battle.attackImpactDuration + battle.attackRetreatDuration
 
-    if animation.applied and shakeTimer >= 0 and shakeTimer <= shakeDuration then
+    if applied and shakeTimer >= 0 and shakeTimer <= shakeDuration then
       local intensity = 16 * (1 - (shakeTimer / shakeDuration))
       local oscillation = math.sin(shakeTimer * 75)
       return baseX + (directionX * intensity * oscillation), baseY + (directionY * intensity * oscillation * 0.6), 0
@@ -332,23 +349,40 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
   local animation = battle:getAttackAnimation()
   if animation and animation.applied then
     if animation.kind ~= "splash" then
-      local textX, textY = Character.getAttackRenderState(animation.target, battle, gridToScreen, tileW)
-      if not textX then
-        textX, textY = gridToScreen(animation.target.column, animation.target.row)
+      local strikeDuration =
+        battle.attackWindupDuration
+        + battle.attackLungeDuration
+        + battle.attackImpactDuration
+        + battle.attackRetreatDuration
+        + battle.attackHoldDuration
+      local currentTarget = animation.target
+      local currentDamage = animation.damage
+      local currentCritical = animation.critical
+      local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+
+      if animation.counterDamage and animation.timer >= strikeDuration then
+        currentTarget = animation.attacker
+        currentDamage = animation.counterDamage
+        currentCritical = false
+        elapsed = (animation.timer - strikeDuration) - battle.attackWindupDuration - battle.attackLungeDuration
       end
 
-      local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+      local textX, textY = Character.getAttackRenderState(currentTarget, battle, gridToScreen, tileW)
+      if not textX then
+        textX, textY = gridToScreen(currentTarget.column, currentTarget.row)
+      end
+
       local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
-      local rise = 72 * math.min(1, elapsed / floatDuration)
+      local rise = 72 * math.min(1, math.max(0, elapsed) / floatDuration)
       local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
       local alpha = 1
       if elapsed > fadeStart then
         alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
       end
 
-      local damageText = "-" .. animation.damage
-      local damageScale = animation.critical and 9 or 3
-      local damageX = textX + (tileW * 0.5) - (animation.critical and 88 or 30)
+      local damageText = "-" .. currentDamage
+      local damageScale = currentCritical and 9 or 3
+      local damageX = textX + (tileW * 0.5) - (currentCritical and 88 or 30)
       local damageY = textY - 52 - rise
 
       love.graphics.setColor(0, 0, 0, alpha)
@@ -356,7 +390,7 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
       love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
       love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
       love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
-      if animation.critical then
+      if currentCritical then
         love.graphics.setColor(1, 0.9, 0.15, alpha)
       else
         love.graphics.setColor(1, 0.1, 0.1, alpha)

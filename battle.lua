@@ -989,6 +989,28 @@ function Battle:calculateDamage(attacker, defender)
   return damage, critical
 end
 
+function Battle:isMeleeAttack(attacker, defender)
+  if not attacker or not defender then
+    return false
+  end
+  return self:getTileDistance(attacker.column, attacker.row, defender.column, defender.row) == 1
+end
+
+function Battle:canCounterAttack(attacker, defender)
+  return
+    attacker
+    and defender
+    and defender.className == "counter"
+    and defender.hp > 0
+    and self:isMeleeAttack(attacker, defender)
+end
+
+function Battle:calculateCounterDamage(attacker, defender)
+  local attackerAtk = attacker and attacker.atk or 0
+  local attackerDef = attacker and attacker.def or 0
+  return math.max(1, attackerAtk - attackerDef)
+end
+
 function Battle:defeatCharacter(target)
   for index, character in ipairs(self.characters) do
     if character == target then
@@ -1080,6 +1102,8 @@ function Battle:confirmAttack(activeCharacter)
     startHp = target.hp,
     damage = damage,
     critical = critical,
+    counterDamage = nil,
+    counterApplied = false,
     timer = 0,
     applied = false,
     defeatedTargets = {},
@@ -1162,6 +1186,12 @@ function Battle:update(dt)
   if self.attackAnimation then
     local animation = self.attackAnimation
     animation.timer = animation.timer + dt
+    local strikeDuration =
+      self.attackWindupDuration
+      + self.attackLungeDuration
+      + self.attackImpactDuration
+      + self.attackRetreatDuration
+      + self.attackHoldDuration
 
     if not animation.applied and animation.timer >= self.attackWindupDuration + self.attackLungeDuration then
       animation.applied = true
@@ -1194,16 +1224,32 @@ function Battle:update(dt)
         if animation.target.hp <= 0 then
           animation.target.hp = 0
           animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.target
+        elseif not animation.counterApplied and self:canCounterAttack(animation.attacker, animation.target) then
+          animation.counterDamage = self:calculateCounterDamage(animation.attacker, animation.target)
         end
       end
     end
 
-    local totalDuration =
-      self.attackWindupDuration
-      + self.attackLungeDuration
-      + self.attackImpactDuration
-      + self.attackRetreatDuration
-      + self.attackHoldDuration
+    if
+      animation.counterDamage
+      and not animation.counterApplied
+      and animation.timer >= strikeDuration + self.attackWindupDuration + self.attackLungeDuration
+    then
+      animation.counterApplied = true
+      animation.attacker.hp = animation.attacker.hp - animation.counterDamage
+      if animation.attacker.team == "player" then
+        self:triggerScreenShake(0.24, 14)
+      end
+      if animation.attacker.hp <= 0 then
+        animation.attacker.hp = 0
+        animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.attacker
+      end
+    end
+
+    local totalDuration = strikeDuration
+    if animation.counterDamage then
+      totalDuration = totalDuration + strikeDuration
+    end
 
     if animation.timer >= totalDuration then
       if #animation.defeatedTargets > 0 then
