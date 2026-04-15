@@ -25,6 +25,7 @@ local camera = nil
 local battle = nil
 local lifebar = nil
 local enemyTurnState = nil
+local mapBackgroundScale = 2.5
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -36,7 +37,6 @@ local obstacles = {}
 local characters = {}
 local currentTurn = 1
 local playerSpawnCount = 5
-local enemySpawnCount = 3
 local treeCount = 56
 local bushCount = 24
 local stoneCount = 16
@@ -52,6 +52,22 @@ local availableClasses = {
   {className = "tactician", sprites = {"tactician_boy", "tactician_girl"}},
   {className = "tank", sprites = {"tank_boy", "tank_girl"}},
 }
+
+local enemyArchetypes = {
+  {name = "affamé", file = "affamé.png", stats = {hp = 4, mov = 5, def = 2, atk = 5}},
+  {name = "embourbe", file = "embourbe.png", stats = {hp = 6, mov = 3, def = 5, atk = 2}},
+  {name = "loup1", file = "loup1.png", stats = {hp = 3, mov = 6, def = 2, atk = 5}},
+  {name = "loup2", file = "loup2.png", stats = {hp = 4, mov = 6, def = 2, atk = 4}},
+  {name = "loup3", file = "loup3.png", stats = {hp = 5, mov = 5, def = 2, atk = 4}},
+  {name = "noye", file = "noye.png", stats = {hp = 5, mov = 4, def = 4, atk = 3}},
+  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 3, mov = 7, def = 2, atk = 4}},
+  {name = "serpentroche", file = "serpentroche.png", stats = {hp = 5, mov = 4, def = 4, atk = 3}},
+  {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 3, mov = 5, def = 2, atk = 6}},
+  {name = "trauma", file = "trauma.png", stats = {hp = 4, mov = 4, def = 3, atk = 5}},
+  {name = "trauma2", file = "trauma2.png", stats = {hp = 5, mov = 4, def = 3, atk = 4}},
+  {name = "trauma3", file = "trauma3.png", stats = {hp = 6, mov = 3, def = 3, atk = 4}},
+}
+local enemySpawnCount = 6
 
 local function shuffledCopy(list)
   local copy = {}
@@ -132,14 +148,15 @@ local function buildCandidates(columnStart, columnEnd, rowStart, rowEnd, blocked
   return candidates
 end
 
-local function generateSpawnPositions(count, columnStart, columnEnd, rowStart, rowEnd, anchorColumn, anchorRow, direction)
+local function generateSpawnPositions(count, columnStart, columnEnd, rowStart, rowEnd, anchorColumn, anchorRow, direction, minDistance)
   local positions = {}
   local blockedLookup = {}
+  local separationDistance = minDistance or 2.6
 
   while #positions < count do
     local candidates = buildCandidates(columnStart, columnEnd, rowStart, rowEnd, blockedLookup, function(column, row)
       for _, position in ipairs(positions) do
-        if tileDistance(column, row, position.column, position.row) < 2.6 then
+        if tileDistance(column, row, position.column, position.row) < separationDistance then
           return 0
         end
       end
@@ -254,6 +271,7 @@ end
 local function loadSprites(playerSpawnPositions, enemySpawnPositions)
   local roster = {}
   local classPool = shuffledCopy(availableClasses)
+  local enemyPool = shuffledCopy(enemyArchetypes)
 
   for index, spawn in ipairs(playerSpawnPositions) do
     local classInfo = classPool[index]
@@ -272,14 +290,15 @@ local function loadSprites(playerSpawnPositions, enemySpawnPositions)
   end
 
   for index, spawn in ipairs(enemySpawnPositions) do
+    local enemyInfo = enemyPool[index]
     roster[#roster + 1] = Character.new(
-      "trauma_" .. index,
-      "assets/sprites/mobs/trauma.png",
+      enemyInfo.name,
+      "assets/sprites/mobs/" .. enemyInfo.file,
       spawn.column,
       spawn.row,
-      Character.rollStats(16),
+      enemyInfo.stats,
       spawn.direction,
-      "trauma",
+      enemyInfo.name,
       "enemy"
     )
   end
@@ -351,8 +370,8 @@ function love.load()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
 
-  local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right")
-  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 16, 6, 14, 13, 10, "left")
+  local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
+  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
   local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
 
   for c = 1, cols do
@@ -382,6 +401,10 @@ function love.load()
   })
   camera = Camera.new(screenW, screenH)
   camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
+  camera:setBounds(
+    mapBackground:getWidth() * mapBackgroundScale,
+    mapBackground:getHeight() * mapBackgroundScale
+  )
 end
 
 function love.update(dt)
@@ -550,7 +573,7 @@ function love.draw()
   end
 
   if mapBackground then
-    love.graphics.draw(mapBackground, 0, 0, 0, 2.5, 2.5)
+    love.graphics.draw(mapBackground, 0, 0, 0, mapBackgroundScale, mapBackgroundScale)
   end
 
   for c = 1, cols do
