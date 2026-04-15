@@ -17,6 +17,8 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
+local thornsTile = nil
+local algaeTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
@@ -27,6 +29,8 @@ local lifebar = nil
 local enemyTurnState = nil
 local mapBackgroundScale = 2.5
 local hudFont = nil
+local terrainEffectScale = 0.9
+local terrainEffectAppearDuration = 0.25
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -346,7 +350,7 @@ local function advanceTurn(activeCharacter)
   if activeIndex then
     currentTurn = (activeIndex % #characters) + 1
   else
-    currentTurn = 1
+    currentTurn = math.max(1, math.min(currentTurn, #characters))
   end
 
   if battle then
@@ -365,6 +369,8 @@ function love.load()
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
+  thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
+  algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
   lifebar = Lifebar.new("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
@@ -591,6 +597,62 @@ function love.draw()
         local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(attackTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
+      end
+    end
+  end
+
+  if battle and thornsTile then
+    local now = love.timer.getTime()
+    for thornKey, createdAt in pairs(battle:getThorns()) do
+      local commaIndex = thornKey:find(",")
+      local column = tonumber(thornKey:sub(1, commaIndex - 1))
+      local row = tonumber(thornKey:sub(commaIndex + 1))
+      if column and row then
+        local x, y = gridToScreen(column, row)
+        local appearRatio = math.min(1, math.max(0, (now - createdAt) / terrainEffectAppearDuration))
+        local effectScale = terrainEffectScale * (0.6 + (0.4 * appearRatio))
+        local drawScaleX = (tileW / thornsTile:getWidth()) * effectScale
+        local drawScaleY = (tileH / thornsTile:getHeight()) * effectScale
+        local drawX = x + ((tileW - (thornsTile:getWidth() * drawScaleX)) * 0.5)
+        local drawY = y + ((tileH - (thornsTile:getHeight() * drawScaleY)) * 0.5)
+        love.graphics.setColor(1, 1, 1, appearRatio)
+        love.graphics.draw(
+          thornsTile,
+          drawX,
+          drawY,
+          0,
+          drawScaleX,
+          drawScaleY
+        )
+        love.graphics.setColor(1, 1, 1, 1)
+      end
+    end
+  end
+
+  if battle and algaeTile then
+    local now = love.timer.getTime()
+    for algaeKey, createdAt in pairs(battle:getAlgae()) do
+      local commaIndex = algaeKey:find(",")
+      local column = tonumber(algaeKey:sub(1, commaIndex - 1))
+      local row = tonumber(algaeKey:sub(commaIndex + 1))
+      if column and row then
+        local x, y = gridToScreen(column, row)
+        local appearRatio = math.min(1, math.max(0, (now - createdAt) / terrainEffectAppearDuration))
+        local effectScale = terrainEffectScale * (0.6 + (0.4 * appearRatio))
+        local drawScaleX = (tileW / algaeTile:getWidth()) * effectScale
+        local drawScaleY = (tileH / algaeTile:getHeight()) * effectScale
+        local drawX = x + ((tileW - (algaeTile:getWidth() * drawScaleX)) * 0.5)
+        local drawY = y + ((tileH - (algaeTile:getHeight() * drawScaleY)) * 0.5)
+        love.graphics.setColor(1, 1, 1, appearRatio)
+        love.graphics.draw(
+          algaeTile,
+          drawX,
+          drawY,
+          0,
+          drawScaleX,
+          drawScaleY
+        )
         love.graphics.setColor(1, 1, 1, 1)
       end
     end

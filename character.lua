@@ -315,37 +315,59 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
   end
 
   local animation = battle:getAttackAnimation()
-  if not animation or not animation.applied then
-    return
+  if animation and animation.applied then
+    local textX, textY = Character.getAttackRenderState(animation.target, battle, gridToScreen, tileW)
+    if not textX then
+      textX, textY = gridToScreen(animation.target.column, animation.target.row)
+    end
+
+    local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+    local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
+    local rise = 72 * math.min(1, elapsed / floatDuration)
+    local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
+    local alpha = 1
+    if elapsed > fadeStart then
+      alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
+    end
+
+    local damageText = "-" .. animation.damage
+    local damageScale = 3
+    local damageX = textX + (tileW * 0.5) - 30
+    local damageY = textY - 52 - rise
+
+    love.graphics.setColor(0, 0, 0, alpha)
+    love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
+    love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
+    love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
+    love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
+    love.graphics.setColor(1, 0.1, 0.1, alpha)
+    love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
+    love.graphics.setColor(1, 1, 1, 1)
   end
 
-  local textX, textY = Character.getAttackRenderState(animation.target, battle, gridToScreen, tileW)
-  if not textX then
-    textX, textY = gridToScreen(animation.target.column, animation.target.row)
+  for _, popup in ipairs(battle:getDamagePopups()) do
+    local popupX, popupY = gridToScreen(popup.column, popup.row)
+    local popupRatio = math.min(1, popup.timer / battle.damagePopupDuration)
+    local popupRise = 72 * popupRatio
+    local popupAlpha = 1
+    if popupRatio > 0.5 then
+      popupAlpha = math.max(0, 1 - ((popupRatio - 0.5) / 0.5))
+    end
+
+    local popupText = "-" .. popup.damage
+    local popupScale = 3
+    local popupDrawX = popupX + (tileW * 0.5) - 30
+    local popupDrawY = popupY - 52 - popupRise
+
+    love.graphics.setColor(0, 0, 0, popupAlpha)
+    love.graphics.print(popupText, popupDrawX - 3, popupDrawY, 0, popupScale, popupScale)
+    love.graphics.print(popupText, popupDrawX + 3, popupDrawY, 0, popupScale, popupScale)
+    love.graphics.print(popupText, popupDrawX, popupDrawY - 3, 0, popupScale, popupScale)
+    love.graphics.print(popupText, popupDrawX, popupDrawY + 3, 0, popupScale, popupScale)
+    love.graphics.setColor(1, 0.1, 0.1, popupAlpha)
+    love.graphics.print(popupText, popupDrawX, popupDrawY, 0, popupScale, popupScale)
+    love.graphics.setColor(1, 1, 1, 1)
   end
-
-  local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
-  local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
-  local rise = 72 * math.min(1, elapsed / floatDuration)
-  local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
-  local alpha = 1
-  if elapsed > fadeStart then
-    alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
-  end
-
-  local damageText = "-" .. animation.damage
-  local damageScale = 3
-  local damageX = textX + (tileW * 0.5) - 30
-  local damageY = textY - 52 - rise
-
-  love.graphics.setColor(0, 0, 0, alpha)
-  love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
-  love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
-  love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
-  love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
-  love.graphics.setColor(1, 0.1, 0.1, alpha)
-  love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
-  love.graphics.setColor(1, 1, 1, 1)
 end
 
 return Character

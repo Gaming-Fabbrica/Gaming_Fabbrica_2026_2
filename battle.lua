@@ -13,6 +13,9 @@ function Battle.new(cols, rows, map)
     moveTarget = { column = 1, row = 1 },
     attackRange = {},
     attackTarget = { column = 1, row = 1 },
+    thorns = {},
+    algae = {},
+    damagePopups = {},
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
@@ -26,6 +29,7 @@ function Battle.new(cols, rows, map)
     attackRetreatDuration = 0.14,
     attackHoldDuration = 0.45,
     deathDuration = 0.75,
+    damagePopupDuration = 0.7,
   }
   return setmetatable(instance, Battle)
 end
@@ -56,6 +60,55 @@ function Battle:startTurn()
   self.deathAnimation = nil
   self.movingCharacter = nil
   self.completedActionCharacter = nil
+end
+
+function Battle:getThorns()
+  return self.thorns
+end
+
+function Battle:getAlgae()
+  return self.algae
+end
+
+function Battle:getDamagePopups()
+  return self.damagePopups
+end
+
+function Battle:hasThornsAt(column, row)
+  return self.thorns[column .. "," .. row] ~= nil
+end
+
+function Battle:hasAlgaeAt(column, row)
+  return self.algae[column .. "," .. row] ~= nil
+end
+
+function Battle:addThorns(column, row)
+  self.thorns[column .. "," .. row] = love.timer.getTime()
+  print(string.format("[thorns] add at %d,%d", column, row))
+end
+
+function Battle:addAlgae(column, row)
+  self.algae[column .. "," .. row] = love.timer.getTime()
+end
+
+function Battle:addDamagePopup(column, row, damage)
+  self.damagePopups[#self.damagePopups + 1] = {
+    column = column,
+    row = row,
+    damage = damage,
+    timer = 0,
+  }
+end
+
+function Battle:updateDamagePopups(dt)
+  local nextPopups = {}
+  for _, popup in ipairs(self.damagePopups) do
+    popup.timer = popup.timer + dt
+    if popup.timer < self.damagePopupDuration then
+      nextPopups[#nextPopups + 1] = popup
+    end
+  end
+  self.damagePopups = nextPopups
 end
 
 function Battle:startActionPhase()
@@ -202,6 +255,13 @@ function Battle:isWalkableStep(column, row, ignoreCharacter)
   return self:isPassable(column, row, ignoreCharacter)
 end
 
+function Battle:getMovementCost(column, row)
+  if self:hasAlgaeAt(column, row) then
+    return 2
+  end
+  return 1
+end
+
 function Battle:getHexNeighbors(column, row)
   if column % 2 == 0 then
     return {
@@ -293,19 +353,23 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves, ignoreCharact
     return reachable
   end
 
-  local queue = {
-    {startColumn, startRow, 0},
+  local open = {
+    {column = startColumn, row = startRow, distance = 0},
   }
   local visited = {[startColumn .. "," .. startRow] = 0}
 
-  local head = 1
-  while head <= #queue do
-    local node = queue[head]
-    head = head + 1
+  while #open > 0 do
+    local bestIndex = 1
+    for index = 2, #open do
+      if open[index].distance < open[bestIndex].distance then
+        bestIndex = index
+      end
+    end
 
-    local column = node[1]
-    local row = node[2]
-    local distance = node[3]
+    local node = table.remove(open, bestIndex)
+    local column = node.column
+    local row = node.row
+    local distance = node.distance
 
     if distance > 0 then
       reachable[column .. "," .. row] = true
@@ -316,13 +380,20 @@ function Battle:getReachableTiles(startColumn, startRow, maxMoves, ignoreCharact
         local nextColumn = neighbor[1]
         local nextRow = neighbor[2]
         local nextKey = nextColumn .. "," .. nextRow
+        local stepCost = self:getMovementCost(nextColumn, nextRow)
+        local nextDistance = distance + stepCost
 
         if
           self:isWalkableStep(nextColumn, nextRow, ignored)
-          and not visited[nextKey]
+          and nextDistance <= maxMoves
+          and (visited[nextKey] == nil or nextDistance < visited[nextKey])
         then
-          visited[nextKey] = distance + 1
-          table.insert(queue, {nextColumn, nextRow, distance + 1})
+          visited[nextKey] = nextDistance
+          open[#open + 1] = {
+            column = nextColumn,
+            row = nextRow,
+            distance = nextDistance,
+          }
         end
       end
     end
@@ -346,19 +417,24 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
     }
   end
 
-  local queue = {
-    {startColumn, startRow},
+  local open = {
+    {column = startColumn, row = startRow, distance = 0},
   }
-  local visited = {[startColumn .. "," .. startRow] = true}
+  local visited = {[startColumn .. "," .. startRow] = 0}
   local previous = {}
 
-  local head = 1
-  while head <= #queue do
-    local node = queue[head]
-    head = head + 1
+  while #open > 0 do
+    local bestIndex = 1
+    for index = 2, #open do
+      if open[index].distance < open[bestIndex].distance then
+        bestIndex = index
+      end
+    end
 
-    local column = node[1]
-    local row = node[2]
+    local node = table.remove(open, bestIndex)
+    local column = node.column
+    local row = node.row
+    local distance = node.distance
 
     if column == targetColumn and row == targetRow then
       break
@@ -368,20 +444,25 @@ function Battle:getPathToTarget(startColumn, startRow, targetColumn, targetRow)
       local nextColumn = neighbor[1]
       local nextRow = neighbor[2]
       local nextKey = nextColumn .. "," .. nextRow
+      local nextDistance = distance + self:getMovementCost(nextColumn, nextRow)
 
       if
         self:isWalkableStep(nextColumn, nextRow, self.movingCharacter)
-        and not visited[nextKey]
+        and (visited[nextKey] == nil or nextDistance < visited[nextKey])
       then
-        visited[nextKey] = true
+        visited[nextKey] = nextDistance
         previous[nextKey] = {column, row}
-        queue[#queue + 1] = {nextColumn, nextRow}
+        open[#open + 1] = {
+          column = nextColumn,
+          row = nextRow,
+          distance = nextDistance,
+        }
       end
     end
   end
 
   local targetKey = targetColumn .. "," .. targetRow
-  if not visited[targetKey] then
+  if visited[targetKey] == nil then
     return nil
   end
 
@@ -654,6 +735,45 @@ function Battle:defeatCharacter(target)
   end
 end
 
+function Battle:shouldLeaveThorns(character)
+  return character and character.team == "enemy" and character.className == "embourbe"
+end
+
+function Battle:shouldLeaveAlgae(character)
+  return character and character.team == "enemy" and character.className == "noye"
+end
+
+function Battle:applyLandingTileEffects(character, column, row)
+  if not character or character.team ~= "player" then
+    if character then
+      print(string.format("[thorns] skip landing effects for %s team=%s", character.name, tostring(character.team)))
+    end
+    return false
+  end
+  local targetColumn = column or character.column
+  local targetRow = row or character.row
+  print(string.format("[thorns] landing check %s at %d,%d thorn=%s", character.name, targetColumn, targetRow, tostring(self:hasThornsAt(targetColumn, targetRow))))
+  if not self:hasThornsAt(targetColumn, targetRow) then
+    return false
+  end
+
+  character.hp = math.max(0, character.hp - 1)
+  print(string.format("[thorns] %s takes 1 damage, hp=%d", character.name, character.hp))
+  self:addDamagePopup(targetColumn, targetRow, 1)
+  if character.hp <= 0 then
+    print(string.format("[thorns] %s defeated by thorns at %d,%d", character.name, targetColumn, targetRow))
+    self.mode = "death_animating"
+    self.deathAnimation = {
+      character = character,
+      attacker = character,
+      timer = 0,
+    }
+    return true
+  end
+
+  return false
+end
+
 function Battle:confirmAttack(activeCharacter)
   if not self:isAttackable(self.attackTarget.column, self.attackTarget.row) then
     return false
@@ -690,6 +810,8 @@ function Battle:cancelAttackMode()
 end
 
 function Battle:update(dt)
+  self:updateDamagePopups(dt)
+
   if self.moveAnimation then
     local animation = self.moveAnimation
     animation.timer = animation.timer + dt
@@ -699,15 +821,34 @@ function Battle:update(dt)
 
       if animation.step >= #animation.path then
         local finalNode = animation.path[#animation.path]
+        print(string.format("[move] final landing for %s at %d,%d", animation.character.name, finalNode.column, finalNode.row))
         animation.character:setPosition(finalNode.column, finalNode.row)
+        if self:shouldLeaveThorns(animation.character) then
+          self:addThorns(finalNode.column, finalNode.row)
+        end
+        if self:shouldLeaveAlgae(animation.character) then
+          self:addAlgae(finalNode.column, finalNode.row)
+        end
         self.moveAnimation = nil
         self.movingCharacter = nil
+        if self:applyLandingTileEffects(animation.character, finalNode.column, finalNode.row) then
+          return
+        end
         self:startActionPhase()
         return
       end
 
       local fromNode = animation.path[animation.step]
       local toNode = animation.path[animation.step + 1]
+      if fromNode and toNode then
+        print(string.format("[move] %s traverses %d,%d -> %d,%d", animation.character.name, fromNode.column, fromNode.row, toNode.column, toNode.row))
+      end
+      if self:shouldLeaveThorns(animation.character) and fromNode then
+        self:addThorns(fromNode.column, fromNode.row)
+      end
+      if self:shouldLeaveAlgae(animation.character) and fromNode then
+        self:addAlgae(fromNode.column, fromNode.row)
+      end
       if fromNode and toNode then
         self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
       end
