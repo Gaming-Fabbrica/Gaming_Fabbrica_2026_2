@@ -3,6 +3,7 @@ local Camera = require("camera")
 local Menu = require("menu")
 local Battle = require("battle")
 local Lifebar = require("lifebar")
+local Obstacle = require("obstacle")
 
 local cols = 20
 local rows = 20
@@ -16,7 +17,6 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
-local stoneTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
@@ -40,6 +40,7 @@ local obstacleTiles = {
   {column = 4, row = 3},
   {column = 4, row = 4},
 }
+local obstacles = {}
 local characters = {}
 local currentTurn = 1
 
@@ -174,7 +175,6 @@ function love.load()
 
   mapBackground = love.graphics.newImage("assets/map_bg.png")
   tile = love.graphics.newImage("assets/sprites/hexa.png")
-  stoneTile = love.graphics.newImage("assets/sprites/stone.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
@@ -190,8 +190,10 @@ function love.load()
       map[c][r] = true
     end
   end
-  for _, obstacle in ipairs(obstacleTiles) do
-    map[obstacle.column][obstacle.row] = false
+  obstacles = {}
+  for _, obstacleTile in ipairs(obstacleTiles) do
+    map[obstacleTile.column][obstacleTile.row] = false
+    obstacles[#obstacles + 1] = Obstacle.randomForTile(obstacleTile.column, obstacleTile.row)
   end
   battle = Battle.new(cols, rows, map)
   battle:startTurn()
@@ -379,21 +381,17 @@ function love.draw()
   for c = 1, cols do
     for r = 1, rows do
       local x, y = gridToScreen(c, r)
-      if map[c][r] then
-        love.graphics.draw(tile, x, y)
-        if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
-          local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
-          love.graphics.setColor(1, 1, 1, glow)
-          love.graphics.draw(moveTile, x, y)
-          love.graphics.setColor(1, 1, 1, 1)
-        elseif active and battle and battle:isAttackMode() and battle:isAttackable(c, r) then
-          local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
-          love.graphics.setColor(1, 1, 1, glow)
-          love.graphics.draw(attackTile, x, y)
-          love.graphics.setColor(1, 1, 1, 1)
-        end
-      else
-        love.graphics.draw(stoneTile, x, y)
+      love.graphics.draw(tile, x, y)
+      if active and battle and battle:isMoveMode() and battle:isReachable(c, r) then
+        local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(moveTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
+      elseif active and battle and battle:isAttackMode() and battle:isAttackable(c, r) then
+        local glow = 0.45 + 0.1 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(attackTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
       end
     end
   end
@@ -417,14 +415,34 @@ function love.draw()
     tileH,
     love.timer.getTime()
   )
-  Character.drawDrawList(
-    characterDrawList,
-    tileW,
-    tileH,
-    characterScale,
-    characterRightOffsetX,
-    characterFootOffsetY
-  )
+  local obstacleDrawList = Obstacle.buildDrawList(obstacles, gridToScreen, tileW, tileH)
+  local renderDrawList = {}
+  for _, entry in ipairs(obstacleDrawList) do
+    renderDrawList[#renderDrawList + 1] = entry
+  end
+  for _, entry in ipairs(characterDrawList) do
+    renderDrawList[#renderDrawList + 1] = entry
+  end
+  table.sort(renderDrawList, function(a, b)
+    if a.sortY == b.sortY then
+      return a.sortX < b.sortX
+    end
+    return a.sortY < b.sortY
+  end)
+  for _, entry in ipairs(renderDrawList) do
+    if entry.kind == "obstacle" then
+      Obstacle.drawEntry(entry, tileW, tileH, love.timer.getTime())
+    else
+      Character.drawEntry(
+        entry,
+        tileW,
+        tileH,
+        characterScale,
+        characterRightOffsetX,
+        characterFootOffsetY
+      )
+    end
+  end
   lifebar:draw(
     hoveredCharacter,
     characterDrawList,

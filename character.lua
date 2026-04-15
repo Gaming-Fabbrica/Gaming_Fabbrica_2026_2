@@ -275,29 +275,33 @@ end
 
 function Character.drawDrawList(drawList, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
   for _, entry in ipairs(drawList) do
-    local character = entry.character
-    local spriteW = character.sprite:getWidth()
-    local spriteH = character.sprite:getHeight()
-    local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
-    local scaleX = scale * entry.scaleXFactor
-    local scaleY = scale * entry.scaleYFactor
-    local directionScale = character.direction == "left" and -scaleX or scaleX
-    local tileCenterX = entry.x + (tileW * 0.5)
-    local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
-
-    love.graphics.setColor(1, 1, 1, entry.alpha)
-    love.graphics.draw(
-      character.sprite,
-      tileCenterX + rightOffsetX,
-      tileCenterY + footOffsetY,
-      0,
-      directionScale,
-      scaleY,
-      spriteW * 0.5,
-      spriteH
-    )
-    love.graphics.setColor(1, 1, 1, 1)
+    Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
   end
+end
+
+function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
+  local character = entry.character
+  local spriteW = character.sprite:getWidth()
+  local spriteH = character.sprite:getHeight()
+  local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
+  local scaleX = scale * entry.scaleXFactor
+  local scaleY = scale * entry.scaleYFactor
+  local directionScale = character.direction == "left" and -scaleX or scaleX
+  local tileCenterX = entry.x + (tileW * 0.5)
+  local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
+
+  love.graphics.setColor(1, 1, 1, entry.alpha)
+  love.graphics.draw(
+    character.sprite,
+    tileCenterX + rightOffsetX,
+    tileCenterY + footOffsetY,
+    0,
+    directionScale,
+    scaleY,
+    spriteW * 0.5,
+    spriteH
+  )
+  love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Character.drawAttackDamageText(battle, gridToScreen, tileW)
