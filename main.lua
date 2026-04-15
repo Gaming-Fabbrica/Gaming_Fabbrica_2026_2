@@ -4,6 +4,7 @@ local Menu = require("menu")
 local Battle = require("battle")
 local Lifebar = require("lifebar")
 local Obstacle = require("obstacle")
+local Effects = require("effects")
 
 local cols = 20
 local rows = 20
@@ -17,23 +18,19 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
-local thornsTile = nil
-local algaeTile = nil
-local splashTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
 local characterRightOffsetX = 0
 local camera = nil
 local battle = nil
+local effects = nil
 local lifebar = nil
 local enemyTurnState = nil
 local mapBackgroundScale = 2.5
 local hudFont = nil
 local resultFont = nil
 local resultPromptFont = nil
-local terrainEffectScale = 0.9
-local terrainEffectAppearDuration = 0.25
 local battleResult = nil
 local battleResultTimer = 0
 local battleResultDuration = 1.0
@@ -123,9 +120,8 @@ local function resetGame()
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
-  thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
-  algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
-  splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
+  effects = Effects.new()
+  effects:load()
   lifebar = Lifebar.new("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
@@ -156,6 +152,7 @@ local function resetGame()
   end
 
   battle = Battle.new(cols, rows, map)
+  battle:setEffects(effects)
   battle:startTurn()
   characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
   battle:setCharacters(characters)
@@ -507,6 +504,7 @@ function love.update(dt)
   end
 
   local active = getActiveCharacter()
+  Menu:setCanHeal(active and battle and battle:getTurnPhase() == "move" and battle:isHealer(active))
   if active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
       if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
@@ -591,7 +589,7 @@ function love.update(dt)
     local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
     local focusRow = active.row
-    if gameMode == "move" or gameMode == "attack" then
+    if gameMode == "move" or gameMode == "attack" or gameMode == "heal" then
       focusColumn, focusRow = battle:getCursorColumnRow(active)
     end
 
@@ -602,6 +600,9 @@ function love.update(dt)
         tileX = animatedX
         tileY = animatedY
       end
+    elseif battle and battle:getHealAnimation() then
+      local activeHealAnimation = battle:getHealAnimation()
+      tileX, tileY = gridToScreen(activeHealAnimation.target.column, activeHealAnimation.target.row)
     elseif battle and battle:getAttackAnimation() then
       local attackAnimation = battle:getAttackAnimation()
       if attackAnimation.kind == "splash" then
@@ -649,12 +650,15 @@ function love.draw()
   local active = getActiveCharacter()
   local hoveredCharacter = nil
   local attackAnimation = battle and battle:getAttackAnimation() or nil
+  local healAnimation = battle and battle:getHealAnimation() or nil
   if attackAnimation then
     hoveredCharacter = attackAnimation.target
+  elseif healAnimation then
+    hoveredCharacter = healAnimation.target
   elseif active and active.team == "player" and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
-    if battle and (battle:isMoveMode() or battle:isAttackMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode()) then
       hoverColumn, hoverRow = battle:getCursorColumnRow(active)
     end
     hoveredCharacter = Character.getAtTile(characters, hoverColumn, hoverRow)
@@ -687,84 +691,13 @@ function love.draw()
     end
   end
 
-  if attackAnimation and attackAnimation.kind == "splash" and splashTile then
-    local splashX, splashY = gridToScreen(attackAnimation.centerColumn, attackAnimation.centerRow)
-    local splashRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
-    local splashScale = 0.6 + (0.4 * splashRatio)
-    local splashAlpha = math.min(1, 0.35 + (0.65 * splashRatio))
-    love.graphics.setColor(1, 1, 1, splashAlpha)
-    love.graphics.draw(
-      splashTile,
-      splashX + (tileW * 0.5),
-      splashY + (tileH * 0.5),
-      0,
-      ((tileW * 3) / splashTile:getWidth()) * splashScale,
-      ((tileH * 3) / splashTile:getHeight()) * splashScale,
-      splashTile:getWidth() * 0.5,
-      splashTile:getHeight() * 0.5
-    )
-    love.graphics.setColor(1, 1, 1, 1)
-  end
-
-  if battle and thornsTile then
-    local now = love.timer.getTime()
-    for thornKey, createdAt in pairs(battle:getThorns()) do
-      local commaIndex = thornKey:find(",")
-      local column = tonumber(thornKey:sub(1, commaIndex - 1))
-      local row = tonumber(thornKey:sub(commaIndex + 1))
-      if column and row then
-        local x, y = gridToScreen(column, row)
-        local appearRatio = math.min(1, math.max(0, (now - createdAt) / terrainEffectAppearDuration))
-        local effectScale = terrainEffectScale * (0.6 + (0.4 * appearRatio))
-        local drawScaleX = (tileW / thornsTile:getWidth()) * effectScale
-        local drawScaleY = (tileH / thornsTile:getHeight()) * effectScale
-        local drawX = x + ((tileW - (thornsTile:getWidth() * drawScaleX)) * 0.5)
-        local drawY = y + ((tileH - (thornsTile:getHeight() * drawScaleY)) * 0.5)
-        love.graphics.setColor(1, 1, 1, appearRatio)
-        love.graphics.draw(
-          thornsTile,
-          drawX,
-          drawY,
-          0,
-          drawScaleX,
-          drawScaleY
-        )
-        love.graphics.setColor(1, 1, 1, 1)
-      end
-    end
-  end
-
-  if battle and algaeTile then
-    local now = love.timer.getTime()
-    for algaeKey, createdAt in pairs(battle:getAlgae()) do
-      local commaIndex = algaeKey:find(",")
-      local column = tonumber(algaeKey:sub(1, commaIndex - 1))
-      local row = tonumber(algaeKey:sub(commaIndex + 1))
-      if column and row then
-        local x, y = gridToScreen(column, row)
-        local appearRatio = math.min(1, math.max(0, (now - createdAt) / terrainEffectAppearDuration))
-        local effectScale = terrainEffectScale * (0.6 + (0.4 * appearRatio))
-        local drawScaleX = (tileW / algaeTile:getWidth()) * effectScale
-        local drawScaleY = (tileH / algaeTile:getHeight()) * effectScale
-        local drawX = x + ((tileW - (algaeTile:getWidth() * drawScaleX)) * 0.5)
-        local drawY = y + ((tileH - (algaeTile:getHeight() * drawScaleY)) * 0.5)
-        love.graphics.setColor(1, 1, 1, appearRatio)
-        love.graphics.draw(
-          algaeTile,
-          drawX,
-          drawY,
-          0,
-          drawScaleX,
-          drawScaleY
-        )
-        love.graphics.setColor(1, 1, 1, 1)
-      end
-    end
+  if effects and battle then
+    effects:drawWorld(battle, gridToScreen, tileW, tileH, love.timer.getTime())
   end
 
   if active and active.team == "player" and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
-    if battle and (battle:isMoveMode() or battle:isAttackMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
       cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
@@ -826,7 +759,7 @@ function love.draw()
   end
 
   local isAnimating = battle and battle:isAnimating()
-  if active and active.team == "player" and not isAnimating then
+  if active and active.team == "player" and not isAnimating and (not battle or battle:getMode() == "menu") then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
@@ -978,6 +911,21 @@ function love.keypressed(key)
       end
       Menu:reset()
     end
+  elseif gameMode == "heal" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      if battle and active then
+        battle:moveHealTargetByKey(active, key)
+      end
+    elseif key == "return" or key == "kpenter" or key == "enter" then
+      if battle and active and battle:confirmHeal(active) then
+        Menu:reset()
+      end
+    elseif key == "tab" then
+      if battle then
+        battle:cancelHealMode()
+      end
+      Menu:reset()
+    end
   elseif gameMode == "attack" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
@@ -999,6 +947,10 @@ function love.keypressed(key)
       if battle and battle:getTurnPhase() == "move" then
         if Menu:isMoveSelected() then
           battle:startMoveSelection(active)
+        elseif selectedAction == "Soigner" then
+          if battle:startHealSelection(active) then
+            Menu:reset()
+          end
         elseif selectedAction == "Rester ici" then
           battle:startActionPhase()
         end

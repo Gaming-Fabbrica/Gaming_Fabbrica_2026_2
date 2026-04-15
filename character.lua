@@ -241,6 +241,7 @@ end
 
 function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH, timeSeconds)
   local drawList = {}
+  local healAnimation = battle and battle:getHealAnimation() or nil
 
   for _, character in ipairs(characters) do
     local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha =
@@ -252,6 +253,17 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
       alpha = 1
     end
 
+    local tintR = 1
+    local tintG = 1
+    local tintB = 1
+    if healAnimation and healAnimation.target == character then
+      local ratio = math.min(1, healAnimation.timer / healAnimation.duration)
+      local pulse = 0.5 + (0.5 * math.sin((healAnimation.timer * 18) - 0.6))
+      local intensity = (1 - ratio) * (0.45 + (0.35 * pulse))
+      tintG = 1 - (0.32 * intensity)
+      tintB = 1 - (0.08 * intensity)
+    end
+
     drawList[#drawList + 1] = {
       character = character,
       x = x,
@@ -260,6 +272,9 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
       scaleXFactor = scaleXFactor or 1,
       scaleYFactor = scaleYFactor or 1,
       alpha = alpha or 1,
+      tintR = tintR,
+      tintG = tintG,
+      tintB = tintB,
       sortY = y + (tileH * 0.5),
       sortX = x + (tileW * 0.5),
     }
@@ -295,7 +310,7 @@ function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, 
   local tileCenterX = entry.x + (tileW * 0.5)
   local tileCenterY = entry.y + (tileH * 0.5) - entry.jumpOffset
 
-  love.graphics.setColor(1, 1, 1, entry.alpha)
+  love.graphics.setColor(entry.tintR or 1, entry.tintG or 1, entry.tintB or 1, entry.alpha)
   love.graphics.draw(
     character.sprite,
     tileCenterX + rightOffsetX,

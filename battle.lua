@@ -6,6 +6,7 @@ function Battle.new(cols, rows, map)
     cols = cols,
     rows = rows,
     map = map,
+    effects = nil,
     mode = "menu",
     turnPhase = "move",
     characters = {},
@@ -13,9 +14,8 @@ function Battle.new(cols, rows, map)
     moveTarget = { column = 1, row = 1 },
     attackRange = {},
     attackTarget = { column = 1, row = 1 },
-    thorns = {},
-    algae = {},
-    damagePopups = {},
+    healTargets = {},
+    healTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
@@ -39,6 +39,10 @@ function Battle:setMap(map)
   self.map = map
 end
 
+function Battle:setEffects(effects)
+  self.effects = effects
+end
+
 function Battle:setCharacters(characters)
   self.characters = characters or {}
 end
@@ -56,7 +60,11 @@ function Battle:startTurn()
   self.mode = "menu"
   self.moveRange = {}
   self.attackRange = {}
+  self.healTargets = {}
   self.moveAnimation = nil
+  if self.effects then
+    self.effects:clearHealAnimation()
+  end
   self.attackAnimation = nil
   self.deathAnimation = nil
   self.deathQueue = nil
@@ -65,52 +73,47 @@ function Battle:startTurn()
 end
 
 function Battle:getThorns()
-  return self.thorns
+  return self.effects and self.effects:getThorns() or {}
 end
 
 function Battle:getAlgae()
-  return self.algae
+  return self.effects and self.effects:getAlgae() or {}
 end
 
 function Battle:getDamagePopups()
-  return self.damagePopups
+  return self.effects and self.effects:getDamagePopups() or {}
 end
 
 function Battle:hasThornsAt(column, row)
-  return self.thorns[column .. "," .. row] ~= nil
+  return self.effects and self.effects:hasThornsAt(column, row) or false
 end
 
 function Battle:hasAlgaeAt(column, row)
-  return self.algae[column .. "," .. row] ~= nil
+  return self.effects and self.effects:hasAlgaeAt(column, row) or false
 end
 
 function Battle:addThorns(column, row)
-  self.thorns[column .. "," .. row] = love.timer.getTime()
-  print(string.format("[thorns] add at %d,%d", column, row))
+  if self.effects then
+    self.effects:addThorns(column, row)
+  end
 end
 
 function Battle:addAlgae(column, row)
-  self.algae[column .. "," .. row] = love.timer.getTime()
+  if self.effects then
+    self.effects:addAlgae(column, row)
+  end
 end
 
 function Battle:addDamagePopup(column, row, damage)
-  self.damagePopups[#self.damagePopups + 1] = {
-    column = column,
-    row = row,
-    damage = damage,
-    timer = 0,
-  }
+  if self.effects then
+    self.effects:addDamagePopup(column, row, damage)
+  end
 end
 
 function Battle:updateDamagePopups(dt)
-  local nextPopups = {}
-  for _, popup in ipairs(self.damagePopups) do
-    popup.timer = popup.timer + dt
-    if popup.timer < self.damagePopupDuration then
-      nextPopups[#nextPopups + 1] = popup
-    end
+  if self.effects then
+    self.effects:updateDamagePopups(dt)
   end
-  self.damagePopups = nextPopups
 end
 
 function Battle:startActionPhase()
@@ -118,6 +121,7 @@ function Battle:startActionPhase()
   self.mode = "menu"
   self.moveRange = {}
   self.attackRange = {}
+  self.healTargets = {}
   self.movingCharacter = nil
 end
 
@@ -132,6 +136,12 @@ function Battle:setMode(mode)
   end
   if mode ~= "attack" then
     self.attackRange = {}
+  end
+  if mode ~= "heal" then
+    self.healTargets = {}
+  end
+  if mode ~= "heal_animating" and self.effects then
+    self.effects:clearHealAnimation()
   end
   if mode ~= "attack_animating" then
     self.attackAnimation = nil
@@ -189,8 +199,16 @@ function Battle:isAttackMode()
   return self.mode == "attack"
 end
 
+function Battle:isHealMode()
+  return self.mode == "heal"
+end
+
 function Battle:getAttackAnimation()
   return self.attackAnimation
+end
+
+function Battle:getHealAnimation()
+  return self.effects and self.effects:getHealAnimation() or nil
 end
 
 function Battle:getDeathAnimation()
@@ -210,7 +228,7 @@ function Battle:getMoveAnimation()
 end
 
 function Battle:isAnimating()
-  return self.moveAnimation ~= nil or self.attackAnimation ~= nil or self.deathAnimation ~= nil
+  return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.deathAnimation ~= nil
 end
 
 function Battle:isAnimatingCharacter(character)
@@ -238,11 +256,17 @@ function Battle:isAttackable(column, row)
   return self.attackRange[column .. "," .. row]
 end
 
+function Battle:isHealable(column, row)
+  return self.healTargets[column .. "," .. row]
+end
+
 function Battle:getCursorColumnRow(activeCharacter)
   if self.mode == "move" then
     return self.moveTarget.column, self.moveTarget.row
   elseif self.mode == "attack" then
     return self.attackTarget.column, self.attackTarget.row
+  elseif self.mode == "heal" then
+    return self.healTarget.column, self.healTarget.row
   end
   return activeCharacter.column, activeCharacter.row
 end
@@ -259,10 +283,7 @@ function Battle:isWalkableStep(column, row, ignoreCharacter)
 end
 
 function Battle:getMovementCost(column, row)
-  if self:hasAlgaeAt(column, row) then
-    return 2
-  end
-  return 1
+  return self.effects and self.effects:getMovementCost(column, row) or 1
 end
 
 function Battle:getHexNeighbors(column, row)
@@ -499,6 +520,10 @@ function Battle:updateCharacterDirection(character, fromColumn, toColumn)
   end
 end
 
+function Battle:isHealer(character)
+  return character and character.team == "player" and character.className == "healer"
+end
+
 function Battle:getAttackableTiles(activeCharacter)
   if self:isSplashAttacker(activeCharacter) then
     return self:getSplashAttackCenters(activeCharacter)
@@ -666,6 +691,117 @@ function Battle:startAttackSelection(activeCharacter)
   end
 
   return false
+end
+
+function Battle:getHealableTargets(activeCharacter)
+  local healable = {}
+
+  for _, character in ipairs(self.characters) do
+    if
+      character ~= activeCharacter
+      and character.team == activeCharacter.team
+      and character.hp < character.maxHp
+    then
+      healable[character.column .. "," .. character.row] = true
+    end
+  end
+
+  return healable
+end
+
+function Battle:startHealSelection(activeCharacter)
+  if self.turnPhase ~= "move" or not self:isHealer(activeCharacter) then
+    return false
+  end
+
+  self.healTargets = self:getHealableTargets(activeCharacter)
+  local nearestDistance = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isHealable(character.column, character.row) then
+      local distance = self:getTileDistance(activeCharacter.column, activeCharacter.row, character.column, character.row)
+      if distance and (nearestDistance == nil or distance < nearestDistance) then
+        nearestDistance = distance
+        self.healTarget.column = character.column
+        self.healTarget.row = character.row
+      end
+    end
+  end
+
+  if nearestDistance then
+    self.mode = "heal"
+    return true
+  end
+
+  self.healTargets = {}
+  return false
+end
+
+function Battle:selectHealTargetInDirection(originColumn, originRow, key)
+  local originX, originY = self:getGridVector(originColumn, originRow)
+  local bestColumn = originColumn
+  local bestRow = originRow
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isHealable(character.column, character.row) then
+      local targetX, targetY = self:getGridVector(character.column, character.row)
+      local dx = targetX - originX
+      local dy = targetY - originY
+      local primary = nil
+      local secondary = nil
+
+      if key == "left" and dx < 0 then
+        primary = -dx
+        secondary = math.abs(dy)
+      elseif key == "right" and dx > 0 then
+        primary = dx
+        secondary = math.abs(dy)
+      elseif key == "up" and dy < 0 then
+        primary = -dy
+        secondary = math.abs(dx)
+      elseif key == "down" and dy > 0 then
+        primary = dy
+        secondary = math.abs(dx)
+      end
+
+      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = character.column
+        bestRow = character.row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:moveHealTargetByKey(activeCharacter, key)
+  self.healTarget.column, self.healTarget.row = self:selectHealTargetInDirection(
+    self.healTarget.column,
+    self.healTarget.row,
+    key
+  )
+end
+
+function Battle:confirmHeal(activeCharacter)
+  if not self:isHealable(self.healTarget.column, self.healTarget.row) then
+    return false
+  end
+
+  local target = self:getCharacterAt(self.healTarget.column, self.healTarget.row, nil)
+  if not target or target.team ~= activeCharacter.team or target == activeCharacter then
+    return false
+  end
+
+  self.healTargets = {}
+  self.mode = "heal_animating"
+  if self.effects then
+    self.effects:startHealAnimation(activeCharacter, target)
+  end
+  return true
 end
 
 function Battle:getBestMoveTileFor(activeCharacter)
@@ -924,6 +1060,11 @@ function Battle:cancelAttackMode()
   self.attackRange = {}
 end
 
+function Battle:cancelHealMode()
+  self.mode = "menu"
+  self.healTargets = {}
+end
+
 function Battle:update(dt)
   self:updateDamagePopups(dt)
 
@@ -967,6 +1108,16 @@ function Battle:update(dt)
       if fromNode and toNode then
         self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
       end
+    end
+    return
+  end
+
+  if self:getHealAnimation() then
+    local completedHealer = self.effects and self.effects:updateHealAnimation(dt) or nil
+    if completedHealer then
+      self.mode = "menu"
+      self.completedActionCharacter = completedHealer
+      return
     end
     return
   end
