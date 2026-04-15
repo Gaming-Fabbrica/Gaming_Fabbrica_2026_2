@@ -933,7 +933,7 @@ function love.keypressed(key)
           Menu:reset()
         end
       end
-    elseif key == "tab" then
+    elseif key == "backspace" then
       -- cancel move mode and keep current turn
       if battle then
         battle:cancelMoveMode()
@@ -949,7 +949,7 @@ function love.keypressed(key)
       if battle and active and battle:confirmHeal(active) then
         Menu:reset()
       end
-    elseif key == "tab" then
+    elseif key == "backspace" then
       if battle then
         battle:cancelHealMode()
       end
@@ -964,7 +964,7 @@ function love.keypressed(key)
       if battle and active then
         battle:confirmAttack(active)
       end
-    elseif key == "tab" then
+    elseif key == "backspace" then
       if battle then
         battle:cancelAttackMode()
       end
