@@ -20,6 +20,9 @@ function Lifebar:getDisplayedHp(character, battle)
   if not animation or animation.target ~= character then
     return displayedHp, maxHp
   end
+  if animation.kind == "splash" then
+    return displayedHp, maxHp
+  end
 
   local startHp = animation.startHp or displayedHp
   if not animation.applied then

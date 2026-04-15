@@ -316,33 +316,35 @@ function Character.drawAttackDamageText(battle, gridToScreen, tileW)
 
   local animation = battle:getAttackAnimation()
   if animation and animation.applied then
-    local textX, textY = Character.getAttackRenderState(animation.target, battle, gridToScreen, tileW)
-    if not textX then
-      textX, textY = gridToScreen(animation.target.column, animation.target.row)
+    if animation.kind ~= "splash" then
+      local textX, textY = Character.getAttackRenderState(animation.target, battle, gridToScreen, tileW)
+      if not textX then
+        textX, textY = gridToScreen(animation.target.column, animation.target.row)
+      end
+
+      local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
+      local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
+      local rise = 72 * math.min(1, elapsed / floatDuration)
+      local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
+      local alpha = 1
+      if elapsed > fadeStart then
+        alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
+      end
+
+      local damageText = "-" .. animation.damage
+      local damageScale = 3
+      local damageX = textX + (tileW * 0.5) - 30
+      local damageY = textY - 52 - rise
+
+      love.graphics.setColor(0, 0, 0, alpha)
+      love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
+      love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
+      love.graphics.setColor(1, 0.1, 0.1, alpha)
+      love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
+      love.graphics.setColor(1, 1, 1, 1)
     end
-
-    local elapsed = animation.timer - battle.attackWindupDuration - battle.attackLungeDuration
-    local floatDuration = battle.attackImpactDuration + battle.attackRetreatDuration + battle.attackHoldDuration
-    local rise = 72 * math.min(1, elapsed / floatDuration)
-    local fadeStart = battle.attackImpactDuration + battle.attackRetreatDuration
-    local alpha = 1
-    if elapsed > fadeStart then
-      alpha = math.max(0, 1 - ((elapsed - fadeStart) / battle.attackHoldDuration))
-    end
-
-    local damageText = "-" .. animation.damage
-    local damageScale = 3
-    local damageX = textX + (tileW * 0.5) - 30
-    local damageY = textY - 52 - rise
-
-    love.graphics.setColor(0, 0, 0, alpha)
-    love.graphics.print(damageText, damageX - 3, damageY, 0, damageScale, damageScale)
-    love.graphics.print(damageText, damageX + 3, damageY, 0, damageScale, damageScale)
-    love.graphics.print(damageText, damageX, damageY - 3, 0, damageScale, damageScale)
-    love.graphics.print(damageText, damageX, damageY + 3, 0, damageScale, damageScale)
-    love.graphics.setColor(1, 0.1, 0.1, alpha)
-    love.graphics.print(damageText, damageX, damageY, 0, damageScale, damageScale)
-    love.graphics.setColor(1, 1, 1, 1)
   end
 
   for _, popup in ipairs(battle:getDamagePopups()) do

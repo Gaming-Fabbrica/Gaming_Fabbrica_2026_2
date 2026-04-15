@@ -20,6 +20,7 @@ function Battle.new(cols, rows, map)
     moveAnimation = nil,
     attackAnimation = nil,
     deathAnimation = nil,
+    deathQueue = nil,
     completedActionCharacter = nil,
     moveStepDuration = 0.6,
     jumpHeight = 64,
@@ -58,6 +59,7 @@ function Battle:startTurn()
   self.moveAnimation = nil
   self.attackAnimation = nil
   self.deathAnimation = nil
+  self.deathQueue = nil
   self.movingCharacter = nil
   self.completedActionCharacter = nil
 end
@@ -136,6 +138,7 @@ function Battle:setMode(mode)
   end
   if mode ~= "death_animating" then
     self.deathAnimation = nil
+    self.deathQueue = nil
   end
 end
 
@@ -497,11 +500,63 @@ function Battle:updateCharacterDirection(character, fromColumn, toColumn)
 end
 
 function Battle:getAttackableTiles(activeCharacter)
+  if self:isSplashAttacker(activeCharacter) then
+    return self:getSplashAttackCenters(activeCharacter)
+  end
   return self:getTilesInRange(
     activeCharacter.column,
     activeCharacter.row,
     activeCharacter.attackRange or 1
   )
+end
+
+function Battle:isSplashAttacker(character)
+  return character and character.team == "enemy" and character.className == "affamé"
+end
+
+function Battle:getSplashAreaTiles(centerColumn, centerRow)
+  local areaTiles = {[centerColumn .. "," .. centerRow] = true}
+  for _, neighbor in ipairs(self:getHexNeighbors(centerColumn, centerRow)) do
+    local column = neighbor[1]
+    local row = neighbor[2]
+    if self:isInMap(column, row) then
+      areaTiles[column .. "," .. row] = true
+    end
+  end
+  return areaTiles
+end
+
+function Battle:getSplashTargetsForCenter(activeCharacter, centerColumn, centerRow)
+  local targets = {}
+  local areaTiles = self:getSplashAreaTiles(centerColumn, centerRow)
+
+  for _, character in ipairs(self:getOpponentsOf(activeCharacter)) do
+    if areaTiles[character.column .. "," .. character.row] then
+      targets[#targets + 1] = character
+    end
+  end
+
+  return targets
+end
+
+function Battle:getSplashAttackCenters(activeCharacter)
+  local centers = {}
+  local tilesInRange = self:getTilesInRange(
+    activeCharacter.column,
+    activeCharacter.row,
+    activeCharacter.attackRange or 2
+  )
+
+  for key in pairs(tilesInRange) do
+    local commaIndex = key:find(",")
+    local column = tonumber(key:sub(1, commaIndex - 1))
+    local row = tonumber(key:sub(commaIndex + 1))
+    if #self:getSplashTargetsForCenter(activeCharacter, column, row) > 0 then
+      centers[key] = true
+    end
+  end
+
+  return centers
 end
 
 function Battle:selectAttackTargetInDirection(originColumn, originRow, key)
@@ -551,6 +606,41 @@ function Battle:startAttackSelection(activeCharacter)
   end
 
   self.attackRange = self:getAttackableTiles(activeCharacter)
+  if self:isSplashAttacker(activeCharacter) then
+    local bestCount = nil
+    local bestDistance = nil
+
+    for key in pairs(self.attackRange) do
+      local commaIndex = key:find(",")
+      local column = tonumber(key:sub(1, commaIndex - 1))
+      local row = tonumber(key:sub(commaIndex + 1))
+      local targets = self:getSplashTargetsForCenter(activeCharacter, column, row)
+      local targetCount = #targets
+      local distance = self:getTileDistance(activeCharacter.column, activeCharacter.row, column, row)
+
+      if
+        targetCount > 0
+        and (
+          bestCount == nil
+          or targetCount > bestCount
+          or (targetCount == bestCount and distance < bestDistance)
+        )
+      then
+        bestCount = targetCount
+        bestDistance = distance
+        self.attackTarget.column = column
+        self.attackTarget.row = row
+      end
+    end
+
+    if bestCount then
+      self.mode = "attack"
+      return true
+    end
+
+    return false
+  end
+
   local tilesInRange = self:getTilesInRange(
     activeCharacter.column,
     activeCharacter.row,
@@ -779,6 +869,29 @@ function Battle:confirmAttack(activeCharacter)
     return false
   end
 
+  if self:isSplashAttacker(activeCharacter) then
+    local targets = self:getSplashTargetsForCenter(activeCharacter, self.attackTarget.column, self.attackTarget.row)
+    if #targets == 0 then
+      return false
+    end
+
+    self:updateCharacterDirection(activeCharacter, activeCharacter.column, self.attackTarget.column)
+    self.attackRange = {}
+    self.mode = "attack_animating"
+    self.attackAnimation = {
+      kind = "splash",
+      attacker = activeCharacter,
+      centerColumn = self.attackTarget.column,
+      centerRow = self.attackTarget.row,
+      targets = targets,
+      target = targets[1],
+      timer = 0,
+      applied = false,
+      defeatedTargets = {},
+    }
+    return true
+  end
+
   local target = self:getCharacterAt(self.attackTarget.column, self.attackTarget.row, activeCharacter)
   if not target then
     return false
@@ -794,7 +907,7 @@ function Battle:confirmAttack(activeCharacter)
     damage = self:calculateDamage(activeCharacter, target),
     timer = 0,
     applied = false,
-    defeated = false,
+    defeatedTargets = {},
   }
   return true
 end
@@ -862,10 +975,22 @@ function Battle:update(dt)
 
     if not animation.applied and animation.timer >= self.attackWindupDuration + self.attackLungeDuration then
       animation.applied = true
-      animation.target.hp = animation.target.hp - animation.damage
-      if animation.target.hp <= 0 then
-        animation.target.hp = 0
-        animation.defeated = true
+      if animation.kind == "splash" then
+        for _, target in ipairs(animation.targets) do
+          local damage = self:calculateDamage(animation.attacker, target)
+          target.hp = target.hp - damage
+          self:addDamagePopup(target.column, target.row, damage)
+          if target.hp <= 0 then
+            target.hp = 0
+            animation.defeatedTargets[#animation.defeatedTargets + 1] = target
+          end
+        end
+      else
+        animation.target.hp = animation.target.hp - animation.damage
+        if animation.target.hp <= 0 then
+          animation.target.hp = 0
+          animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.target
+        end
       end
     end
 
@@ -877,11 +1002,16 @@ function Battle:update(dt)
       + self.attackHoldDuration
 
     if animation.timer >= totalDuration then
-      if animation.defeated then
+      if #animation.defeatedTargets > 0 then
         self.attackAnimation = nil
         self.mode = "death_animating"
+        self.deathQueue = {
+          attacker = animation.attacker,
+          targets = animation.defeatedTargets,
+          index = 1,
+        }
         self.deathAnimation = {
-          character = animation.target,
+          character = animation.defeatedTargets[1],
           attacker = animation.attacker,
           timer = 0,
         }
@@ -901,9 +1031,19 @@ function Battle:update(dt)
 
     if animation.timer >= self.deathDuration then
       self:defeatCharacter(animation.character)
-      self.deathAnimation = nil
-      self.mode = "menu"
-      self.completedActionCharacter = animation.attacker
+      if self.deathQueue and self.deathQueue.index < #self.deathQueue.targets then
+        self.deathQueue.index = self.deathQueue.index + 1
+        self.deathAnimation = {
+          character = self.deathQueue.targets[self.deathQueue.index],
+          attacker = self.deathQueue.attacker,
+          timer = 0,
+        }
+      else
+        self.deathAnimation = nil
+        self.deathQueue = nil
+        self.mode = "menu"
+        self.completedActionCharacter = animation.attacker
+      end
     end
   end
 end

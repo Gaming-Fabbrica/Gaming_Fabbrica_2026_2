@@ -19,6 +19,7 @@ local moveTile = nil
 local attackTile = nil
 local thornsTile = nil
 local algaeTile = nil
+local splashTile = nil
 
 local characterScale = 1.0
 local characterFootOffsetY = 32
@@ -59,7 +60,7 @@ local availableClasses = {
 }
 
 local enemyArchetypes = {
-  {name = "affamé", file = "affamé.png", stats = {hp = 8, mov = 5, def = 2, atk = 5}},
+  {name = "affamé", file = "affamé.png", stats = {hp = 8, mov = 5, def = 2, atk = 5, attackRange = 2}},
   {name = "embourbe", file = "embourbe.png", stats = {hp = 12, mov = 3, def = 5, atk = 2}},
   {name = "loup1", file = "loup1.png", stats = {hp = 6, mov = 6, def = 2, atk = 5}},
   {name = "loup2", file = "loup2.png", stats = {hp = 8, mov = 6, def = 2, atk = 4}},
@@ -371,6 +372,7 @@ function love.load()
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
   thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
   algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
+  splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
   lifebar = Lifebar.new("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
@@ -523,11 +525,15 @@ function love.update(dt)
       end
     elseif battle and battle:getAttackAnimation() then
       local attackAnimation = battle:getAttackAnimation()
-      local attackerX, attackerY = Character.getAttackRenderState(attackAnimation.attacker, battle, gridToScreen, tileW)
-      local targetX, targetY = Character.getAttackRenderState(attackAnimation.target, battle, gridToScreen, tileW)
-      if attackerX and targetX then
-        tileX = (attackerX + targetX) * 0.5
-        tileY = (attackerY + targetY) * 0.5
+      if attackAnimation.kind == "splash" then
+        tileX, tileY = gridToScreen(attackAnimation.centerColumn, attackAnimation.centerRow)
+      else
+        local attackerX, attackerY = Character.getAttackRenderState(attackAnimation.attacker, battle, gridToScreen, tileW)
+        local targetX, targetY = Character.getAttackRenderState(attackAnimation.target, battle, gridToScreen, tileW)
+        if attackerX and targetX then
+          tileX = (attackerX + targetX) * 0.5
+          tileY = (attackerY + targetY) * 0.5
+        end
       end
     elseif battle and battle:getDeathAnimation() then
       local deathAnimation = battle:getDeathAnimation()
@@ -600,6 +606,25 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, 1)
       end
     end
+  end
+
+  if attackAnimation and attackAnimation.kind == "splash" and splashTile then
+    local splashX, splashY = gridToScreen(attackAnimation.centerColumn, attackAnimation.centerRow)
+    local splashRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
+    local splashScale = 0.6 + (0.4 * splashRatio)
+    local splashAlpha = math.min(1, 0.35 + (0.65 * splashRatio))
+    love.graphics.setColor(1, 1, 1, splashAlpha)
+    love.graphics.draw(
+      splashTile,
+      splashX + (tileW * 0.5),
+      splashY + (tileH * 0.5),
+      0,
+      ((tileW * 3) / splashTile:getWidth()) * splashScale,
+      ((tileH * 3) / splashTile:getHeight()) * splashScale,
+      splashTile:getWidth() * 0.5,
+      splashTile:getHeight() * 0.5
+    )
+    love.graphics.setColor(1, 1, 1, 1)
   end
 
   if battle and thornsTile then
