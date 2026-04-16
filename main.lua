@@ -59,6 +59,26 @@ local rumbleLow = 0
 local rumbleHigh = 0
 local allowGamepadRumble = true
 
+local function logViewport(label)
+  local graphicsWidth, graphicsHeight = love.graphics.getDimensions()
+  local windowWidth, windowHeight, flags = love.window.getMode()
+  local zoom = camera and string.format("%.4f", camera.zoom) or "nil"
+  flags = flags or {}
+  print(string.format(
+    "[%s] graphics=%dx%d window=%dx%d zoom=%s highdpi=%s fullscreen=%s resizable=%s fullscreentype=%s",
+    label,
+    graphicsWidth,
+    graphicsHeight,
+    windowWidth,
+    windowHeight,
+    zoom,
+    tostring(flags.highdpi),
+    tostring(flags.fullscreen),
+    tostring(flags.resizable),
+    tostring(flags.fullscreentype)
+  ))
+end
+
 local map = {}
 local obstacles = {}
 local characters = {}
@@ -182,6 +202,7 @@ local function resetGame()
       love.window.setMode(screenW, screenH, {
         fullscreen = true,
         fullscreentype = "desktop",
+        highdpi = true,
       })
       screenW = love.graphics.getWidth()
       screenH = love.graphics.getHeight()
@@ -672,6 +693,7 @@ function love.load()
   isWeb = love.system.getOS() == "Web"
   allowGamepadRumble = not isWeb
   resetGame()
+  logViewport("load")
 end
 
 function love.update(dt)
@@ -905,6 +927,7 @@ function love.resize(width, height)
   if camera then
     camera:setViewSize(width, height)
   end
+  logViewport("resize")
 end
 
 function love.draw()

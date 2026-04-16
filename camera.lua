@@ -12,9 +12,8 @@ function Camera.new(viewWidth, viewHeight)
     boundsWidth = nil,
     boundsHeight = nil,
     zoom = 0.8,
-    baseZoom = 0.8,
-    referenceViewWidth = 1920,
-    referenceViewHeight = 1080,
+    targetWorldViewWidth = 2820,
+    targetWorldViewHeight = 1880,
     smoothDiv = 8,
     epsilon = 0.2,
     shakeTimer = 0,
@@ -36,10 +35,9 @@ function Camera:getWorldViewHeight()
 end
 
 function Camera:updateZoom()
-  local widthRatio = self.viewWidth / self.referenceViewWidth
-  local heightRatio = self.viewHeight / self.referenceViewHeight
-  local viewRatio = math.min(widthRatio, heightRatio, 1)
-  self.zoom = self.baseZoom * viewRatio
+  local widthRatio = self.viewWidth / self.targetWorldViewWidth
+  local heightRatio = self.viewHeight / self.targetWorldViewHeight
+  self.zoom = math.min(widthRatio, heightRatio)
 end
 
 function Camera:clampPosition(x, y)
