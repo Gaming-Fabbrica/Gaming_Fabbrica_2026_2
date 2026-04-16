@@ -26,15 +26,15 @@ Character.frenchClassNames = {
 }
 
 Character.heroBaseStats = {
-  archer = {hp = 3, mov = 5, def = 2, atk = 6},
-  atk_mov = {hp = 3, mov = 6, def = 2, atk = 5},
-  counter = {hp = 4, mov = 4, def = 4, atk = 4},
-  free = {hp = 4, mov = 5, def = 3, atk = 4},
-  grab = {hp = 3, mov = 6, def = 2, atk = 5},
-  healer = {hp = 4, mov = 4, def = 2, atk = 4},
-  lancer = {hp = 4, mov = 4, def = 3, atk = 5},
-  tactician = {hp = 4, mov = 3, def = 5, atk = 4},
-  tank = {hp = 6, mov = 2, def = 6, atk = 2},
+  archer = {hp = 4, mov = 5, def = 2, atk = 4},
+  atk_mov = {hp = 4, mov = 5, def = 3, atk = 5},
+  counter = {hp = 5, mov = 4, def = 4, atk = 4},
+  free = {hp = 5, mov = 4, def = 3, atk = 4},
+  grab = {hp = 4, mov = 5, def = 3, atk = 5},
+  healer = {hp = 4, mov = 4, def = 2, atk = 2},
+  lancer = {hp = 5, mov = 4, def = 3, atk = 4},
+  tactician = {hp = 6, mov = 3, def = 4, atk = 5},
+  tank = {hp = 7, mov = 3, def = 5, atk = 4},
 }
 
 function Character.getFrenchClassName(className)
@@ -73,7 +73,7 @@ function Character.rollHeroStats(className)
   }
   local statKeys = {"hp", "mov", "def", "atk"}
 
-  for _ = 1, 6 do
+  for _ = 1, 4 do
     local key = statKeys[math.random(#statKeys)]
     stats[key] = stats[key] + 1
   end
