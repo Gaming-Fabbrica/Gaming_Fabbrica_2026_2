@@ -355,10 +355,6 @@ function Battle:getTankRange()
   return self.tankRange
 end
 
-function Battle:getGrappleRange()
-  return self.grappleRange
-end
-
 function Battle:isAnimating()
   return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.tankAnimation ~= nil or self.grappleAnimation ~= nil or self.deathAnimation ~= nil
 end

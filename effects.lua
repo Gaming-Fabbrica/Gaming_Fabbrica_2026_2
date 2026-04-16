@@ -25,21 +25,6 @@ function Effects:load()
   self.healHeartTile = love.graphics.newImage("assets/sprites/items/heart.png")
 end
 
-function Effects:clear()
-  self.thorns = {}
-  self.algae = {}
-  self.damagePopups = {}
-  self.healAnimation = nil
-end
-
-function Effects:getThorns()
-  return self.thorns
-end
-
-function Effects:getAlgae()
-  return self.algae
-end
-
 function Effects:getDamagePopups()
   return self.damagePopups
 end

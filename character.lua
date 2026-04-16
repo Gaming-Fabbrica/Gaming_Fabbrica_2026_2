@@ -144,10 +144,6 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   return setmetatable(instance, Character)
 end
 
-function Character:getPosition()
-  return self.column, self.row
-end
-
 function Character:setPosition(column, row)
   self.column = column
   self.row = row
