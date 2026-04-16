@@ -18,6 +18,7 @@ local tileSpacingY = 0
 local cursor = nil
 local moveTile = nil
 local attackTile = nil
+local provokedIcon = nil
 
 local characterScale = 1.1
 local characterFootOffsetY = 32
@@ -125,6 +126,7 @@ local function resetGame()
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
   attackTile = love.graphics.newImage("assets/sprites/attack.png")
+  provokedIcon = love.graphics.newImage("assets/sprites/effects/provoked.png")
   effects = Effects.new()
   effects:load()
   lifebar = Lifebar.new("assets/sprites/items/heart.png")
@@ -456,7 +458,7 @@ local function advanceTurn(activeCharacter)
   if #characters == 0 then
     currentTurn = 1
     if battle then
-      battle:startTurn()
+      battle:startTurn(nil)
     end
     Menu:reset()
     return
@@ -477,7 +479,7 @@ local function advanceTurn(activeCharacter)
   end
 
   if battle then
-    battle:startTurn()
+    battle:startTurn(characters[currentTurn])
   end
   enemyTurnState = nil
   Menu:reset()
@@ -534,6 +536,7 @@ function love.update(dt)
 
   local active = getActiveCharacter()
   Menu:setCanHeal(active and battle and battle:getTurnPhase() == "move" and battle:isHealer(active))
+  Menu:setCanTank(active and battle and battle:getTurnPhase() == "move" and battle:isTank(active))
   Menu:setCanActionFirst(
     active
     and battle
@@ -731,6 +734,11 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(attackTile, x, y)
         love.graphics.setColor(1, 1, 1, 1)
+      elseif active and battle and battle:isTankMode() and battle:getTankRange()[c .. "," .. r] then
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(attackTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
       elseif active and battle and battle:isGrappleMode() and battle:isInGrappleRange(c, r) then
         local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
         love.graphics.setColor(1, 1, 1, glow)
@@ -746,13 +754,26 @@ function love.draw()
 
   if active and active.team == "player" and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
-    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
+    if battle and battle:isTankMode() then
+      cursorX = nil
+      cursorY = nil
+    elseif battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
       cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
       cursorX, cursorY = gridToScreen(active.column, active.row)
     end
-    love.graphics.draw(cursor, cursorX, cursorY)
+    if cursorX and cursorY then
+      love.graphics.draw(cursor, cursorX, cursorY)
+    end
+    if battle and battle:isTankMode() then
+      for _, character in ipairs(characters) do
+        if character.team == "enemy" and battle:isTankTarget(character.column, character.row) then
+          local targetCursorX, targetCursorY = gridToScreen(character.column, character.row)
+          love.graphics.draw(cursor, targetCursorX, targetCursorY)
+        end
+      end
+    end
   end
 
   local characterDrawList = Character.buildDrawList(
@@ -789,6 +810,28 @@ function love.draw()
         characterRightOffsetX,
         characterFootOffsetY
       )
+    end
+  end
+  if provokedIcon then
+    for _, entry in ipairs(characterDrawList) do
+      local character = entry.character
+      if character.team == "enemy" and character.forcedTarget ~= nil then
+        local iconScale = (tileW * 0.16) / provokedIcon:getWidth()
+        local iconX = entry.x + (tileW * 0.78)
+        local iconY = entry.y + (tileH * 0.02) - entry.jumpOffset
+        love.graphics.setColor(1, 0.85, 0.92, entry.alpha or 1)
+        love.graphics.draw(
+          provokedIcon,
+          iconX,
+          iconY,
+          0,
+          iconScale,
+          iconScale,
+          provokedIcon:getWidth() * 0.5,
+          provokedIcon:getHeight() * 0.5
+        )
+        love.graphics.setColor(1, 1, 1, 1)
+      end
     end
   end
   lifebar:draw(
@@ -974,6 +1017,17 @@ function love.keypressed(key)
       end
       Menu:reset()
     end
+  elseif gameMode == "tank" then
+    if key == "return" or key == "kpenter" or key == "enter" then
+      if battle and active and battle:confirmTank(active) then
+        Menu:reset()
+      end
+    elseif key == "backspace" then
+      if battle then
+        battle:setMode("menu")
+      end
+      Menu:reset()
+    end
   elseif gameMode == "grapple" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
@@ -1010,6 +1064,10 @@ function love.keypressed(key)
       if battle and battle:getTurnPhase() == "move" then
         if Menu:isMoveSelected() then
           battle:startMoveSelection(active)
+        elseif selectedAction == "Tank" then
+          if battle:startTankSelection(active) then
+            Menu:reset()
+          end
         elseif selectedAction == "Se battre" then
           if battle:beginActionFirstTurn(active) then
             Menu:reset()

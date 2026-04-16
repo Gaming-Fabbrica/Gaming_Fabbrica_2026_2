@@ -16,18 +16,22 @@ function Battle.new(cols, rows, map)
     attackTarget = { column = 1, row = 1 },
     healTargets = {},
     healTarget = { column = 1, row = 1 },
+    tankRange = {},
+    tankTargets = {},
     grappleRange = {},
     grappleTargets = {},
     grappleTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
+    tankAnimation = nil,
     grappleAnimation = nil,
     deathAnimation = nil,
     deathQueue = nil,
     completedActionCharacter = nil,
     returnToMoveAfterAction = false,
     actionSpent = false,
+    tankEffect = nil,
     pendingScreenShake = nil,
     pendingSlowMotion = nil,
     moveStepDuration = 0.6,
@@ -89,12 +93,19 @@ function Battle:getTurnPhase()
   return self.turnPhase
 end
 
-function Battle:startTurn()
+function Battle:startTurn(activeCharacter)
+  if self.tankEffect and self.tankEffect.tank and self.tankEffect.tank.hp <= 0 then
+    self:clearTankEffect()
+  elseif self.tankEffect and activeCharacter and activeCharacter == self.tankEffect.tank then
+    self:clearTankEffect()
+  end
   self.turnPhase = "move"
   self.mode = "menu"
   self.moveRange = {}
   self.attackRange = {}
   self.healTargets = {}
+  self.tankRange = {}
+  self.tankTargets = {}
   self.grappleRange = {}
   self.grappleTargets = {}
   self.moveAnimation = nil
@@ -102,6 +113,7 @@ function Battle:startTurn()
     self.effects:clearHealAnimation()
   end
   self.attackAnimation = nil
+  self.tankAnimation = nil
   self.grappleAnimation = nil
   self.deathAnimation = nil
   self.deathQueue = nil
@@ -161,6 +173,8 @@ function Battle:startActionPhase()
   self.moveRange = {}
   self.attackRange = {}
   self.healTargets = {}
+  self.tankRange = {}
+  self.tankTargets = {}
   self.grappleRange = {}
   self.grappleTargets = {}
   self.movingCharacter = nil
@@ -231,6 +245,10 @@ function Battle:setMode(mode)
   if mode ~= "heal" then
     self.healTargets = {}
   end
+  if mode ~= "tank" then
+    self.tankRange = {}
+    self.tankTargets = {}
+  end
   if mode ~= "grapple" then
     self.grappleRange = {}
     self.grappleTargets = {}
@@ -240,6 +258,9 @@ function Battle:setMode(mode)
   end
   if mode ~= "attack_animating" then
     self.attackAnimation = nil
+  end
+  if mode ~= "tank_animating" then
+    self.tankAnimation = nil
   end
   if mode ~= "grapple_animating" then
     self.grappleAnimation = nil
@@ -273,6 +294,15 @@ function Battle:areOpponents(a, b)
 end
 
 function Battle:getOpponentsOf(character)
+  if character and character.team == "enemy" and character.forcedTarget then
+    for _, other in ipairs(self.characters) do
+      if other == character.forcedTarget then
+        return {other}
+      end
+    end
+    character.forcedTarget = nil
+  end
+
   local opponents = {}
   for _, other in ipairs(self.characters) do
     if self:areOpponents(character, other) then
@@ -301,12 +331,24 @@ function Battle:isHealMode()
   return self.mode == "heal"
 end
 
+function Battle:isTankMode()
+  return self.mode == "tank"
+end
+
 function Battle:isGrappleMode()
   return self.mode == "grapple"
 end
 
 function Battle:getAttackAnimation()
   return self.attackAnimation
+end
+
+function Battle:getTankAnimation()
+  return self.tankAnimation
+end
+
+function Battle:getTankEffect()
+  return self.tankEffect
 end
 
 function Battle:getHealAnimation()
@@ -329,6 +371,10 @@ function Battle:getAttackRange()
   return self.attackRange
 end
 
+function Battle:getTankRange()
+  return self.tankRange
+end
+
 function Battle:getGrappleRange()
   return self.grappleRange
 end
@@ -338,7 +384,7 @@ function Battle:getMoveAnimation()
 end
 
 function Battle:isAnimating()
-  return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.grappleAnimation ~= nil or self.deathAnimation ~= nil
+  return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.tankAnimation ~= nil or self.grappleAnimation ~= nil or self.deathAnimation ~= nil
 end
 
 function Battle:isAnimatingCharacter(character)
@@ -370,6 +416,10 @@ function Battle:isHealable(column, row)
   return self.healTargets[column .. "," .. row]
 end
 
+function Battle:isTankTarget(column, row)
+  return self.tankTargets[column .. "," .. row]
+end
+
 function Battle:isGrappleable(column, row)
   return self.grappleTargets[column .. "," .. row]
 end
@@ -385,6 +435,8 @@ function Battle:getCursorColumnRow(activeCharacter)
     return self.attackTarget.column, self.attackTarget.row
   elseif self.mode == "heal" then
     return self.healTarget.column, self.healTarget.row
+  elseif self.mode == "tank" then
+    return activeCharacter.column, activeCharacter.row
   elseif self.mode == "grapple" then
     return self.grappleTarget.column, self.grappleTarget.row
   end
@@ -646,6 +698,97 @@ end
 
 function Battle:isGrappler(character)
   return character and character.team == "player" and character.className == "grab"
+end
+
+function Battle:isTank(character)
+  return character and character.team == "player" and character.className == "tank"
+end
+
+function Battle:clearTankEffect()
+  if not self.tankEffect then
+    return
+  end
+
+  local tank = self.tankEffect.tank
+  if tank and self.tankEffect.defBonusApplied then
+    tank.def = math.max(0, tank.def - 5)
+  end
+
+  for _, enemy in ipairs(self.tankEffect.enemies or {}) do
+    if enemy and enemy.forcedTarget == tank then
+      enemy.forcedTarget = nil
+    end
+  end
+
+  self.tankEffect = nil
+end
+
+function Battle:activateTankStance(activeCharacter)
+  if self.turnPhase ~= "move" or not self:isTank(activeCharacter) then
+    return false
+  end
+
+  self:clearTankEffect()
+
+  local tilesInRange = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 5)
+  local affectedEnemies = {}
+
+  for _, enemy in ipairs(self.characters) do
+    if enemy.team == "enemy" and tilesInRange[enemy.column .. "," .. enemy.row] then
+      enemy.forcedTarget = activeCharacter
+      affectedEnemies[#affectedEnemies + 1] = enemy
+    end
+  end
+
+  activeCharacter.def = activeCharacter.def + 5
+  self.tankEffect = {
+    tank = activeCharacter,
+    enemies = affectedEnemies,
+    defBonusApplied = true,
+  }
+
+  self.mode = "menu"
+  self.completedActionCharacter = activeCharacter
+  return true
+end
+
+function Battle:startTankSelection(activeCharacter)
+  if self.turnPhase ~= "move" or not self:isTank(activeCharacter) then
+    return false
+  end
+
+  self.tankRange = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 5)
+  self.tankTargets = {}
+  for _, enemy in ipairs(self.characters) do
+    if enemy.team == "enemy" and self.tankRange[enemy.column .. "," .. enemy.row] then
+      self.tankTargets[enemy.column .. "," .. enemy.row] = true
+    end
+  end
+  self.mode = "tank"
+  return true
+end
+
+function Battle:confirmTank(activeCharacter)
+  if self.mode ~= "tank" or not self:isTank(activeCharacter) then
+    return false
+  end
+  local previewRange = self.tankRange
+  self.tankRange = {}
+  self.tankTargets = {}
+  self.mode = "tank_animating"
+  self.tankAnimation = {
+    tank = activeCharacter,
+    timer = 0,
+    duration = 1.2,
+    nextTargetIndex = 1,
+    targets = {},
+  }
+  for _, enemy in ipairs(self.characters) do
+    if enemy.team == "enemy" and previewRange[enemy.column .. "," .. enemy.row] then
+      self.tankAnimation.targets[#self.tankAnimation.targets + 1] = enemy
+    end
+  end
+  return true
 end
 
 function Battle:getAttackableTiles(activeCharacter)
@@ -1269,7 +1412,7 @@ function Battle:calculateDamage(attacker, defender)
   if self:isBackAttack(attacker, defender) then
     damage = math.max(1, attacker.atk)
   else
-    damage = math.max(1, attacker.atk - defender.def)
+    damage = math.max(0, attacker.atk - defender.def)
   end
   if critical then
     damage = damage + 2
@@ -1471,6 +1614,28 @@ function Battle:update(dt)
     local completedHealer = self.effects and self.effects:updateHealAnimation(dt) or nil
     if completedHealer then
       self:completeAction(completedHealer)
+      return
+    end
+    return
+  end
+
+  if self.tankAnimation then
+    local animation = self.tankAnimation
+    animation.timer = animation.timer + dt
+    local targetCount = #animation.targets
+    local interval = targetCount > 0 and (animation.duration / targetCount) or animation.duration
+
+    while animation.nextTargetIndex <= targetCount and animation.timer >= interval * animation.nextTargetIndex do
+      local enemy = animation.targets[animation.nextTargetIndex]
+      if enemy and enemy.hp > 0 then
+        enemy.forcedTarget = animation.tank
+      end
+      animation.nextTargetIndex = animation.nextTargetIndex + 1
+    end
+
+    if animation.timer >= animation.duration then
+      self.tankAnimation = nil
+      self:activateTankStance(animation.tank)
       return
     end
     return

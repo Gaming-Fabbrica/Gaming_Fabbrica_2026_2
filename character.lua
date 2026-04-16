@@ -65,6 +65,11 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
   local resolvedTeam = team or "player"
+  local provokeSprite = nil
+  if resolvedTeam == "player" and resolvedClassName == "tank" then
+    local provokePath = spritePath:gsub("%.png$", "_provoke.png")
+    provokeSprite = love.graphics.newImage(provokePath)
+  end
   local instance = {
     name = name,
     className = resolvedClassName,
@@ -82,6 +87,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     direction = direction or "right",
     team = resolvedTeam,
     spriteFacing = resolvedStats.spriteFacing or (resolvedTeam == "enemy" and "left" or "right"),
+    provokeSprite = provokeSprite,
   }
   return setmetatable(instance, Character)
 end
@@ -311,6 +317,8 @@ end
 function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH, timeSeconds)
   local drawList = {}
   local healAnimation = battle and battle:getHealAnimation() or nil
+  local tankAnimation = battle and battle:getTankAnimation() or nil
+  local tankEffect = battle and battle:getTankEffect() or nil
 
   for _, character in ipairs(characters) do
     local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha =
@@ -335,6 +343,10 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
 
     drawList[#drawList + 1] = {
       character = character,
+      spriteOverride = (
+        (tankAnimation and tankAnimation.tank == character)
+        or (tankEffect and tankEffect.tank == character)
+      ) and character.provokeSprite or nil,
       x = x,
       y = y,
       jumpOffset = jumpOffset or 0,
@@ -367,8 +379,9 @@ end
 
 function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
   local character = entry.character
-  local spriteW = character.sprite:getWidth()
-  local spriteH = character.sprite:getHeight()
+  local sprite = entry.spriteOverride or character.sprite
+  local spriteW = sprite:getWidth()
+  local spriteH = sprite:getHeight()
   local scale = math.min((tileW / spriteW), (tileH / spriteH)) * characterScale
   local scaleX = scale * entry.scaleXFactor
   local scaleY = scale * entry.scaleYFactor
@@ -393,7 +406,7 @@ function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, 
 
   love.graphics.setColor(entry.tintR or 1, entry.tintG or 1, entry.tintB or 1, entry.alpha)
   love.graphics.draw(
-    character.sprite,
+    sprite,
     tileCenterX + rightOffsetX,
     tileCenterY + footOffsetY,
     0,
