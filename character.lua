@@ -423,12 +423,6 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
   return drawList
 end
 
-function Character.drawDrawList(drawList, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
-  for _, entry in ipairs(drawList) do
-    Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
-  end
-end
-
 function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, footOffsetY)
   local character = entry.character
   local sprite = entry.spriteOverride or character.sprite

@@ -62,10 +62,6 @@ function Camera:setTarget(centerX, centerY)
   self.targetX, self.targetY = self:clampPosition(self.targetX, self.targetY)
 end
 
-function Camera:follow(centerX, centerY)
-  self:setTarget(centerX, centerY)
-end
-
 function Camera:update()
   self.x = self.x + (self.targetX - self.x) / self.smoothDiv
   self.y = self.y + (self.targetY - self.y) / self.smoothDiv

@@ -73,10 +73,6 @@ function Battle:consumeSlowMotion()
   return slowMotion
 end
 
-function Battle:setMap(map)
-  self.map = map
-end
-
 function Battle:setEffects(effects)
   self.effects = effects
 end
@@ -121,14 +117,6 @@ function Battle:startTurn(activeCharacter)
   self.completedActionCharacter = nil
   self.returnToMoveAfterAction = false
   self.actionSpent = false
-end
-
-function Battle:getThorns()
-  return self.effects and self.effects:getThorns() or {}
-end
-
-function Battle:getAlgae()
-  return self.effects and self.effects:getAlgae() or {}
 end
 
 function Battle:getDamagePopups()
@@ -363,14 +351,6 @@ function Battle:getGrappleAnimation()
   return self.grappleAnimation
 end
 
-function Battle:getMoveRange()
-  return self.moveRange
-end
-
-function Battle:getAttackRange()
-  return self.attackRange
-end
-
 function Battle:getTankRange()
   return self.tankRange
 end
@@ -379,16 +359,8 @@ function Battle:getGrappleRange()
   return self.grappleRange
 end
 
-function Battle:getMoveAnimation()
-  return self.moveAnimation
-end
-
 function Battle:isAnimating()
   return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.tankAnimation ~= nil or self.grappleAnimation ~= nil or self.deathAnimation ~= nil
-end
-
-function Battle:isAnimatingCharacter(character)
-  return self.moveAnimation ~= nil and self.moveAnimation.character == character
 end
 
 function Battle:getAnimationState(character)
@@ -849,47 +821,6 @@ function Battle:getSplashAttackCenters(activeCharacter)
   end
 
   return centers
-end
-
-function Battle:selectAttackTargetInDirection(originColumn, originRow, key)
-  local originX, originY = self:getGridVector(originColumn, originRow)
-  local bestColumn = originColumn
-  local bestRow = originRow
-  local bestPrimary = nil
-  local bestSecondary = nil
-
-  for _, character in ipairs(self.characters) do
-    if self:isAttackable(character.column, character.row) then
-      local targetX, targetY = self:getGridVector(character.column, character.row)
-      local dx = targetX - originX
-      local dy = targetY - originY
-      local primary = nil
-      local secondary = nil
-
-      if key == "left" and dx < 0 then
-        primary = -dx
-        secondary = math.abs(dy)
-      elseif key == "right" and dx > 0 then
-        primary = dx
-        secondary = math.abs(dy)
-      elseif key == "up" and dy < 0 then
-        primary = -dy
-        secondary = math.abs(dx)
-      elseif key == "down" and dy > 0 then
-        primary = dy
-        secondary = math.abs(dx)
-      end
-
-      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
-        bestPrimary = primary
-        bestSecondary = secondary
-        bestColumn = character.column
-        bestRow = character.row
-      end
-    end
-  end
-
-  return bestColumn, bestRow
 end
 
 function Battle:selectOpponentAttackTargetInDirection(activeCharacter, originColumn, originRow, key)

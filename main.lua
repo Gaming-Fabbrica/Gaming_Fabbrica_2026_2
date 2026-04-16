@@ -457,11 +457,6 @@ local function getActiveCharacter()
   return characters[currentTurn]
 end
 
-local function isPlayerTurn()
-  local active = getActiveCharacter()
-  return active and active.team == "player"
-end
-
 local function advanceTurn(activeCharacter)
   if #characters == 0 then
     currentTurn = 1

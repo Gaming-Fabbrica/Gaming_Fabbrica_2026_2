@@ -46,16 +46,6 @@ function Obstacle.new(kind, column, row, spritePath)
   return setmetatable(instance, Obstacle)
 end
 
-function Obstacle.randomForTile(column, row)
-  local familyRoll = math.random(3)
-  if familyRoll == 1 then
-    return Obstacle.new("stone", column, row, STONE_VARIANTS[math.random(#STONE_VARIANTS)])
-  elseif familyRoll == 2 then
-    return Obstacle.new("bush", column, row, BUSH_VARIANTS[math.random(#BUSH_VARIANTS)])
-  end
-  return Obstacle.new("tree", column, row, TREE_VARIANTS[math.random(#TREE_VARIANTS)])
-end
-
 function Obstacle.randomOfKind(kind, column, row)
   if kind == "stone" then
     return Obstacle.new("stone", column, row, STONE_VARIANTS[math.random(#STONE_VARIANTS)])
