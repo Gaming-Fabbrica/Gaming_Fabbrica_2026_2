@@ -1003,13 +1003,18 @@ end
 
 function Battle:getHealableTargets(activeCharacter)
   local healable = {}
+  local range = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 4)
 
   for _, character in ipairs(self.characters) do
-    if
+    local inRange = range[character.column .. "," .. character.row]
+    local isWoundedAlly =
       character ~= activeCharacter
       and character.team == activeCharacter.team
       and character.hp < character.maxHp
-    then
+    local isTraumaEnemy =
+      character.team == "enemy"
+      and (character.className == "trauma" or character.className == "trauma2" or character.className == "trauma3")
+    if inRange and (isWoundedAlly or isTraumaEnemy) then
       healable[character.column .. "," .. character.row] = true
     end
   end
@@ -1191,14 +1196,16 @@ function Battle:confirmHeal(activeCharacter)
   end
 
   local target = self:getCharacterAt(self.healTarget.column, self.healTarget.row, nil)
-  if not target or target.team ~= activeCharacter.team or target == activeCharacter then
+  local isWoundedAlly = target and target ~= activeCharacter and target.team == activeCharacter.team and target.hp < target.maxHp
+  local isTraumaEnemy = target and target.team == "enemy" and (target.className == "trauma" or target.className == "trauma2" or target.className == "trauma3")
+  if not target or (not isWoundedAlly and not isTraumaEnemy) then
     return false
   end
 
   self.healTargets = {}
   self.mode = "heal_animating"
   if self.effects then
-    self.effects:startHealAnimation(activeCharacter, target)
+    self.effects:startHealAnimation(activeCharacter, target, isTraumaEnemy and "damage" or "heal")
   end
   return true
 end
@@ -1611,9 +1618,18 @@ function Battle:update(dt)
   end
 
   if self:getHealAnimation() then
-    local completedHealer = self.effects and self.effects:updateHealAnimation(dt) or nil
-    if completedHealer then
-      self:completeAction(completedHealer)
+    local healResult = self.effects and self.effects:updateHealAnimation(dt) or nil
+    if healResult then
+      if healResult.defeated then
+        self.mode = "death_animating"
+        self.deathAnimation = {
+          character = healResult.target,
+          attacker = healResult.healer,
+          timer = 0,
+        }
+      else
+        self:completeAction(healResult.healer)
+      end
       return
     end
     return

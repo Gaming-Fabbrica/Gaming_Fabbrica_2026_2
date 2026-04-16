@@ -815,11 +815,11 @@ function love.draw()
   if provokedIcon then
     for _, entry in ipairs(characterDrawList) do
       local character = entry.character
-      if character.team == "enemy" and character.forcedTarget ~= nil then
-        local iconScale = (tileW * 0.16) / provokedIcon:getWidth()
-        local iconX = entry.x + (tileW * 0.78)
-        local iconY = entry.y + (tileH * 0.02) - entry.jumpOffset
-        love.graphics.setColor(1, 0.85, 0.92, entry.alpha or 1)
+        if character.team == "enemy" and character.forcedTarget ~= nil then
+          local iconScale = (tileW * 0.16) / provokedIcon:getWidth()
+          local iconX = entry.x + (tileW * 0.78)
+          local iconY = entry.y - (tileH * 0.22) - entry.jumpOffset
+          love.graphics.setColor(1, 0.85, 0.92, entry.alpha or 1)
         love.graphics.draw(
           provokedIcon,
           iconX,

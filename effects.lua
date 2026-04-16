@@ -96,12 +96,13 @@ function Effects:getMovementCost(column, row)
   return 1
 end
 
-function Effects:startHealAnimation(healer, target)
-  local healAmount = love.math.random(1, 3)
+function Effects:startHealAnimation(healer, target, mode)
+  local amount = love.math.random(1, 3)
   self.healAnimation = {
     healer = healer,
     target = target,
-    healAmount = healAmount,
+    mode = mode or "heal",
+    amount = amount,
     timer = 0,
     duration = 1.0,
     applied = false,
@@ -130,16 +131,27 @@ function Effects:updateHealAnimation(dt)
 
   if not animation.applied and animation.timer >= animation.duration * 0.18 then
     animation.applied = true
-    animation.target.hp = math.min(
-      animation.target.maxHp or animation.target.hp,
-      animation.target.hp + animation.healAmount
-    )
+    if animation.mode == "damage" then
+      animation.target.hp = math.max(0, animation.target.hp - animation.amount)
+      self:addDamagePopup(animation.target.column, animation.target.row, animation.amount)
+    else
+      animation.target.hp = math.min(
+        animation.target.maxHp or animation.target.hp,
+        animation.target.hp + animation.amount
+      )
+    end
   end
 
   if animation.timer >= animation.duration then
-    local healer = animation.healer
+    local result = {
+      healer = animation.healer,
+      target = animation.target,
+      mode = animation.mode,
+      amount = animation.amount,
+      defeated = animation.mode == "damage" and animation.target.hp <= 0,
+    }
     self.healAnimation = nil
-    return healer
+    return result
   end
 
   return nil
