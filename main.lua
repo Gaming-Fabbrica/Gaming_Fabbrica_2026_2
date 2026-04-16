@@ -177,19 +177,15 @@ local function resetGame()
   local screenW = love.graphics.getWidth()
   local screenH = love.graphics.getHeight()
   if not windowInitialized then
-    if isWeb then
-      love.window.setMode(1280, 720, {
-        resizable = true,
-      })
-    else
+    if not isWeb then
       screenW, screenH = love.window.getDesktopDimensions(1)
       love.window.setMode(screenW, screenH, {
         fullscreen = true,
         fullscreentype = "desktop",
       })
+      screenW = love.graphics.getWidth()
+      screenH = love.graphics.getHeight()
     end
-    screenW = love.graphics.getWidth()
-    screenH = love.graphics.getHeight()
     windowInitialized = true
   end
   camera = Camera.new(screenW, screenH)
