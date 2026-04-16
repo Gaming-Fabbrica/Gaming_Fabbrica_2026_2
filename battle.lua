@@ -1456,12 +1456,12 @@ function Battle:calculateCounterDamage(attacker, defender)
   if defender and defender.team == "enemy" then
     local counterAtk = math.floor((defender.atk or 0) * 0.5)
     local targetDef = attacker and attacker.def or 0
-    return math.max(0, counterAtk - targetDef)
+    return math.max(1, counterAtk - targetDef)
   end
 
   local attackerAtk = attacker and attacker.atk or 0
   local attackerDef = attacker and attacker.def or 0
-  return math.max(0, attackerAtk - attackerDef)
+  return math.max(1, attackerAtk - attackerDef)
 end
 
 function Battle:defeatCharacter(target)
