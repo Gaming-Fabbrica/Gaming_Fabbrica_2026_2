@@ -94,15 +94,50 @@ function Character.attackRangeForClass(className)
   return 1
 end
 
+function Character.getCurrentAttackActors(battle)
+  if not battle then
+    return nil, nil
+  end
+
+  local animation = battle:getAttackAnimation()
+  if not animation then
+    return nil, nil
+  end
+
+  local currentAttacker = animation.attacker
+  local currentTarget = animation.target
+  local timer = animation.timer
+  local strikeDuration =
+    battle.attackWindupDuration
+    + battle.attackLungeDuration
+    + battle.attackImpactDuration
+    + battle.attackRetreatDuration
+    + battle.attackHoldDuration
+
+  if animation.counterDamage and timer >= strikeDuration then
+    currentAttacker = animation.target
+    currentTarget = animation.attacker
+  end
+
+  return currentAttacker, currentTarget
+end
+
 function Character.new(name, spritePath, column, row, stats, direction, className, team)
   local resolvedStats = stats or Character.rollStats(16)
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
   local resolvedTeam = team or "player"
   local provokeSprite = nil
+  local attackSprite = nil
   if resolvedTeam == "player" and resolvedClassName == "tank" then
     local provokePath = spritePath:gsub("%.png$", "_provoke.png")
     provokeSprite = love.graphics.newImage(provokePath)
+  end
+  if resolvedTeam == "player" then
+    local attackPath = spritePath:gsub("%.png$", "_attack.png")
+    if love.filesystem.getInfo(attackPath) then
+      attackSprite = love.graphics.newImage(attackPath)
+    end
   end
   local instance = {
     name = name,
@@ -122,6 +157,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     team = resolvedTeam,
     spriteFacing = resolvedStats.spriteFacing or (resolvedTeam == "enemy" and "left" or "right"),
     provokeSprite = provokeSprite,
+    attackSprite = attackSprite,
   }
   return setmetatable(instance, Character)
 end
@@ -195,8 +231,7 @@ function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
     + battle.attackImpactDuration
     + battle.attackRetreatDuration
     + battle.attackHoldDuration
-  local currentAttacker = animation.attacker
-  local currentTarget = animation.target
+  local currentAttacker, currentTarget = Character.getCurrentAttackActors(battle)
   local timer = animation.timer
   local applied = animation.applied
 
@@ -353,6 +388,7 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
   local healAnimation = battle and battle:getHealAnimation() or nil
   local tankAnimation = battle and battle:getTankAnimation() or nil
   local tankEffect = battle and battle:getTankEffect() or nil
+  local currentAttackAttacker = battle and Character.getCurrentAttackActors(battle) or nil
 
   for _, character in ipairs(characters) do
     local x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha =
@@ -377,10 +413,10 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
 
     drawList[#drawList + 1] = {
       character = character,
-      spriteOverride = (
-        (tankAnimation and tankAnimation.tank == character)
-        or (tankEffect and tankEffect.tank == character)
-      ) and character.provokeSprite or nil,
+      spriteOverride =
+        ((currentAttackAttacker == character) and character.attackSprite)
+        or (((tankAnimation and tankAnimation.tank == character) or (tankEffect and tankEffect.tank == character)) and character.provokeSprite)
+        or nil,
       x = x,
       y = y,
       jumpOffset = jumpOffset or 0,
