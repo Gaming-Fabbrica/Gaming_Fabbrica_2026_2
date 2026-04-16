@@ -16,14 +16,21 @@ Menu.disabledEntriesByPhase = {
   },
 }
 Menu.selectedIndex = 1
-Menu.scale = 2
+Menu.scale = 1
+Menu.baseFontSize = 28
 Menu.font = nil
 
 function Menu:getFont()
   if not self.font then
-    self.font = love.graphics.newFont(28)
+    local fontSize = math.max(14, math.floor((self.baseFontSize or 28) * (self.scale or 1) + 0.5))
+    self.font = love.graphics.newFont(fontSize)
   end
   return self.font
+end
+
+function Menu:setUiScale(scale)
+  self.scale = scale or 1
+  self.font = nil
 end
 
 function Menu:reset()
@@ -128,13 +135,14 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   local font = self:getFont()
   local previousFont = love.graphics.getFont()
   love.graphics.setFont(font)
+  local uiScale = self.scale or 1
   local lineHeight = font:getHeight()
   local menuX = worldX
-  local menuY = worldY + 180
-  local rowHeight = lineHeight + 14
-  local padding = 6 * self.scale
-  local leftPadding = 26
-  local rightPadding = 18
+  local menuY = worldY + (180 * uiScale)
+  local rowHeight = lineHeight + math.floor((14 * uiScale) + 0.5)
+  local padding = math.floor((12 * uiScale) + 0.5)
+  local leftPadding = math.floor((26 * uiScale) + 0.5)
+  local rightPadding = math.floor((18 * uiScale) + 0.5)
   local textWidth = 0
   for _, entry in ipairs(entries) do
     textWidth = math.max(textWidth, font:getWidth("> " .. entry))
@@ -149,7 +157,7 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
   end
   screenX = screenX - (menuWidth * 0.5)
 
-  local radius = 30
+  local radius = math.max(12, math.floor((30 * uiScale) + 0.5))
   love.graphics.setColor(1, 1, 1, 0.96)
   love.graphics.rectangle("fill", screenX, screenY, menuWidth, menuHeight, radius, radius, 24)
   love.graphics.setColor(0, 0, 0, 0.18)
@@ -160,16 +168,18 @@ function Menu:draw(worldX, worldY, tileW, worldToScreen)
     if i == self.selectedIndex then
       love.graphics.setColor(0, 0, 0, 1)
       local entryRadius = math.floor(rowHeight * 0.5)
-      love.graphics.rectangle("fill", screenX + 12, y - 2, menuWidth - 24, rowHeight, entryRadius, entryRadius, 24)
+      local insetX = math.floor((12 * uiScale) + 0.5)
+      local textOffsetY = math.floor((5 * uiScale) + 0.5)
+      love.graphics.rectangle("fill", screenX + insetX, y - math.floor((2 * uiScale) + 0.5), menuWidth - (insetX * 2), rowHeight, entryRadius, entryRadius, 24)
       love.graphics.setColor(1, 1, 1, 1)
-      love.graphics.print(entry, screenX + leftPadding, y + 5)
+      love.graphics.print(entry, screenX + leftPadding, y + textOffsetY)
     else
       if self:isEntryEnabled(entry) then
         love.graphics.setColor(0, 0, 0, 1)
       else
         love.graphics.setColor(0.5, 0.5, 0.5, 1)
       end
-      love.graphics.print(entry, screenX + leftPadding, y + 5)
+      love.graphics.print(entry, screenX + leftPadding, y + math.floor((5 * uiScale) + 0.5))
     end
   end
   love.graphics.setColor(1, 1, 1, 1)

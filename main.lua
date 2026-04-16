@@ -39,6 +39,9 @@ local introFadeAlpha = 0
 local introFadeDuration = 0.8
 local slowMotionTimer = 0
 local slowMotionScale = 1
+local uiScale = 1
+local uiReferenceWidth = 2256
+local uiReferenceHeight = 1504
 local isWeb = false
 local windowInitialized = false
 local generateSpawnPositions = nil
@@ -59,19 +62,33 @@ local rumbleLow = 0
 local rumbleHigh = 0
 local allowGamepadRumble = true
 
+local function computeUiScale(viewWidth, viewHeight)
+  return math.min(viewWidth / uiReferenceWidth, viewHeight / uiReferenceHeight)
+end
+
+local function rebuildUi(viewWidth, viewHeight)
+  uiScale = computeUiScale(viewWidth, viewHeight)
+  hudFont = love.graphics.newFont(math.max(14, math.floor((28 * uiScale) + 0.5)))
+  resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", math.max(36, math.floor((72 * uiScale) + 0.5)))
+  resultPromptFont = love.graphics.newFont(math.max(14, math.floor((24 * uiScale) + 0.5)))
+  Menu:setUiScale(uiScale)
+end
+
 local function logViewport(label)
   local graphicsWidth, graphicsHeight = love.graphics.getDimensions()
   local windowWidth, windowHeight, flags = love.window.getMode()
   local zoom = camera and string.format("%.4f", camera.zoom) or "nil"
+  local uiScaleText = string.format("%.4f", uiScale)
   flags = flags or {}
   print(string.format(
-    "[%s] graphics=%dx%d window=%dx%d zoom=%s highdpi=%s fullscreen=%s resizable=%s fullscreentype=%s",
+    "[%s] graphics=%dx%d window=%dx%d zoom=%s uiScale=%s highdpi=%s fullscreen=%s resizable=%s fullscreentype=%s",
     label,
     graphicsWidth,
     graphicsHeight,
     windowWidth,
     windowHeight,
     zoom,
+    uiScaleText,
     tostring(flags.highdpi),
     tostring(flags.fullscreen),
     tostring(flags.resizable),
@@ -164,10 +181,6 @@ local function resetGame()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
-  hudFont = love.graphics.newFont(28)
-  resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", 72)
-  resultPromptFont = love.graphics.newFont(24)
-
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
   local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
   local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
@@ -209,6 +222,7 @@ local function resetGame()
     end
     windowInitialized = true
   end
+  rebuildUi(screenW, screenH)
   camera = Camera.new(screenW, screenH)
   camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
   camera:setBounds(
@@ -924,6 +938,7 @@ function love.update(dt)
 end
 
 function love.resize(width, height)
+  rebuildUi(width, height)
   if camera then
     camera:setViewSize(width, height)
   end
@@ -1114,10 +1129,10 @@ function love.draw()
       battle and battle:getTurnPhase() or "move"
     )
     local font = love.graphics.getFont()
-    local paddingX = 18
-    local paddingY = 12
-    local boxX = 10
-    local boxY = 10
+    local paddingX = math.floor((18 * uiScale) + 0.5)
+    local paddingY = math.floor((12 * uiScale) + 0.5)
+    local boxX = math.floor((10 * uiScale) + 0.5)
+    local boxY = math.floor((10 * uiScale) + 0.5)
     local boxWidth = font:getWidth(hudText) + (paddingX * 2)
     local boxHeight = font:getHeight() + (paddingY * 2)
     local radius = math.floor(boxHeight * 0.5)
@@ -1131,10 +1146,10 @@ function love.draw()
   else
     local font = love.graphics.getFont()
     local text = "No active character"
-    local paddingX = 18
-    local paddingY = 12
-    local boxX = 10
-    local boxY = 10
+    local paddingX = math.floor((18 * uiScale) + 0.5)
+    local paddingY = math.floor((12 * uiScale) + 0.5)
+    local boxX = math.floor((10 * uiScale) + 0.5)
+    local boxY = math.floor((10 * uiScale) + 0.5)
     local boxWidth = font:getWidth(text) + (paddingX * 2)
     local boxHeight = font:getHeight() + (paddingY * 2)
     local radius = math.floor(boxHeight * 0.5)
