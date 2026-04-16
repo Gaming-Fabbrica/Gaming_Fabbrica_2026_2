@@ -412,7 +412,7 @@ loadSprites = function(playerSpawnPositions, enemySpawnPositions)
       spritePath,
       spawn.column,
       spawn.row,
-      Character.rollStats(16),
+      Character.rollHeroStats(classInfo.className),
       spawn.direction,
       classInfo.className,
       "player"

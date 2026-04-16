@@ -25,6 +25,18 @@ Character.frenchClassNames = {
   trauma3 = "Angoisse",
 }
 
+Character.heroBaseStats = {
+  archer = {hp = 3, mov = 5, def = 2, atk = 6},
+  atk_mov = {hp = 3, mov = 6, def = 2, atk = 5},
+  counter = {hp = 4, mov = 4, def = 4, atk = 4},
+  free = {hp = 4, mov = 5, def = 3, atk = 4},
+  grab = {hp = 3, mov = 6, def = 2, atk = 5},
+  healer = {hp = 4, mov = 4, def = 2, atk = 4},
+  lancer = {hp = 4, mov = 4, def = 3, atk = 5},
+  tactician = {hp = 4, mov = 3, def = 5, atk = 4},
+  tank = {hp = 6, mov = 2, def = 6, atk = 2},
+}
+
 function Character.getFrenchClassName(className)
   return Character.frenchClassNames[className] or className or "Inconnu"
 end
@@ -40,6 +52,28 @@ function Character.rollStats(totalPoints)
   local pointsToAssign = math.max(0, (totalPoints or 16) - 8)
 
   for _ = 1, pointsToAssign do
+    local key = statKeys[math.random(#statKeys)]
+    stats[key] = stats[key] + 1
+  end
+
+  return stats
+end
+
+function Character.rollHeroStats(className)
+  local baseStats = Character.heroBaseStats[className]
+  if not baseStats then
+    return Character.rollStats(16)
+  end
+
+  local stats = {
+    hp = baseStats.hp,
+    mov = baseStats.mov,
+    def = baseStats.def,
+    atk = baseStats.atk,
+  }
+  local statKeys = {"hp", "mov", "def", "atk"}
+
+  for _ = 1, 6 do
     local key = statKeys[math.random(#statKeys)]
     stats[key] = stats[key] + 1
   end
