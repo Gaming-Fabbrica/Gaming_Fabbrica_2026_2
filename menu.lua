@@ -6,6 +6,7 @@ Menu.entriesByPhase = {
   action = { "Se battre", "Botte secrète", "Utiliser un objet", "Passer son tour" },
 }
 Menu.canHeal = false
+Menu.canGrapple = false
 Menu.disabledEntriesByPhase = {
   action = {
     ["Botte secrète"] = true,
@@ -31,11 +32,18 @@ function Menu:getEntries()
   if self.phase == "move" and self.canHeal then
     return { "Bouger", "Soigner", "Rester ici" }
   end
+  if self.phase == "action" and self.canGrapple then
+    return { "Se battre", "Grapin", "Botte secrète", "Utiliser un objet", "Passer son tour" }
+  end
   return self.entriesByPhase[self.phase] or {}
 end
 
 function Menu:setCanHeal(canHeal)
   self.canHeal = canHeal == true
+end
+
+function Menu:setCanGrapple(canGrapple)
+  self.canGrapple = canGrapple == true
 end
 
 function Menu:setPhase(phase)

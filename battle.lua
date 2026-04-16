@@ -16,9 +16,13 @@ function Battle.new(cols, rows, map)
     attackTarget = { column = 1, row = 1 },
     healTargets = {},
     healTarget = { column = 1, row = 1 },
+    grappleRange = {},
+    grappleTargets = {},
+    grappleTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
+    grappleAnimation = nil,
     deathAnimation = nil,
     deathQueue = nil,
     completedActionCharacter = nil,
@@ -89,11 +93,14 @@ function Battle:startTurn()
   self.moveRange = {}
   self.attackRange = {}
   self.healTargets = {}
+  self.grappleRange = {}
+  self.grappleTargets = {}
   self.moveAnimation = nil
   if self.effects then
     self.effects:clearHealAnimation()
   end
   self.attackAnimation = nil
+  self.grappleAnimation = nil
   self.deathAnimation = nil
   self.deathQueue = nil
   self.movingCharacter = nil
@@ -150,6 +157,8 @@ function Battle:startActionPhase()
   self.moveRange = {}
   self.attackRange = {}
   self.healTargets = {}
+  self.grappleRange = {}
+  self.grappleTargets = {}
   self.movingCharacter = nil
 end
 
@@ -168,11 +177,18 @@ function Battle:setMode(mode)
   if mode ~= "heal" then
     self.healTargets = {}
   end
+  if mode ~= "grapple" then
+    self.grappleRange = {}
+    self.grappleTargets = {}
+  end
   if mode ~= "heal_animating" and self.effects then
     self.effects:clearHealAnimation()
   end
   if mode ~= "attack_animating" then
     self.attackAnimation = nil
+  end
+  if mode ~= "grapple_animating" then
+    self.grappleAnimation = nil
   end
   if mode ~= "death_animating" then
     self.deathAnimation = nil
@@ -231,6 +247,10 @@ function Battle:isHealMode()
   return self.mode == "heal"
 end
 
+function Battle:isGrappleMode()
+  return self.mode == "grapple"
+end
+
 function Battle:getAttackAnimation()
   return self.attackAnimation
 end
@@ -243,6 +263,10 @@ function Battle:getDeathAnimation()
   return self.deathAnimation
 end
 
+function Battle:getGrappleAnimation()
+  return self.grappleAnimation
+end
+
 function Battle:getMoveRange()
   return self.moveRange
 end
@@ -251,12 +275,16 @@ function Battle:getAttackRange()
   return self.attackRange
 end
 
+function Battle:getGrappleRange()
+  return self.grappleRange
+end
+
 function Battle:getMoveAnimation()
   return self.moveAnimation
 end
 
 function Battle:isAnimating()
-  return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.deathAnimation ~= nil
+  return self.moveAnimation ~= nil or self:getHealAnimation() ~= nil or self.attackAnimation ~= nil or self.grappleAnimation ~= nil or self.deathAnimation ~= nil
 end
 
 function Battle:isAnimatingCharacter(character)
@@ -288,6 +316,14 @@ function Battle:isHealable(column, row)
   return self.healTargets[column .. "," .. row]
 end
 
+function Battle:isGrappleable(column, row)
+  return self.grappleTargets[column .. "," .. row]
+end
+
+function Battle:isInGrappleRange(column, row)
+  return self.grappleRange[column .. "," .. row]
+end
+
 function Battle:getCursorColumnRow(activeCharacter)
   if self.mode == "move" then
     return self.moveTarget.column, self.moveTarget.row
@@ -295,6 +331,8 @@ function Battle:getCursorColumnRow(activeCharacter)
     return self.attackTarget.column, self.attackTarget.row
   elseif self.mode == "heal" then
     return self.healTarget.column, self.healTarget.row
+  elseif self.mode == "grapple" then
+    return self.grappleTarget.column, self.grappleTarget.row
   end
   return activeCharacter.column, activeCharacter.row
 end
@@ -552,6 +590,10 @@ function Battle:isHealer(character)
   return character and character.team == "player" and character.className == "healer"
 end
 
+function Battle:isGrappler(character)
+  return character and character.team == "player" and character.className == "grab"
+end
+
 function Battle:getAttackableTiles(activeCharacter)
   if self:isSplashAttacker(activeCharacter) then
     return self:getSplashAttackCenters(activeCharacter)
@@ -778,6 +820,19 @@ function Battle:getHealableTargets(activeCharacter)
   return healable
 end
 
+function Battle:getGrappleTargets(activeCharacter)
+  local range = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 4)
+  local targets = {}
+
+  for _, character in ipairs(self.characters) do
+    if character ~= activeCharacter and range[character.column .. "," .. character.row] then
+      targets[character.column .. "," .. character.row] = true
+    end
+  end
+
+  return range, targets
+end
+
 function Battle:startHealSelection(activeCharacter)
   if self.turnPhase ~= "move" or not self:isHealer(activeCharacter) then
     return false
@@ -803,6 +858,35 @@ function Battle:startHealSelection(activeCharacter)
   end
 
   self.healTargets = {}
+  return false
+end
+
+function Battle:startGrappleSelection(activeCharacter)
+  if self.turnPhase ~= "action" or not self:isGrappler(activeCharacter) then
+    return false
+  end
+
+  self.grappleRange, self.grappleTargets = self:getGrappleTargets(activeCharacter)
+  local nearestDistance = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isGrappleable(character.column, character.row) then
+      local distance = self:getTileDistance(activeCharacter.column, activeCharacter.row, character.column, character.row)
+      if distance and (nearestDistance == nil or distance < nearestDistance) then
+        nearestDistance = distance
+        self.grappleTarget.column = character.column
+        self.grappleTarget.row = character.row
+      end
+    end
+  end
+
+  if nearestDistance then
+    self.mode = "grapple"
+    return true
+  end
+
+  self.grappleRange = {}
+  self.grappleTargets = {}
   return false
 end
 
@@ -855,6 +939,55 @@ function Battle:moveHealTargetByKey(activeCharacter, key)
   )
 end
 
+function Battle:selectGrappleTargetInDirection(originColumn, originRow, key)
+  local originX, originY = self:getGridVector(originColumn, originRow)
+  local bestColumn = originColumn
+  local bestRow = originRow
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isGrappleable(character.column, character.row) then
+      local targetX, targetY = self:getGridVector(character.column, character.row)
+      local dx = targetX - originX
+      local dy = targetY - originY
+      local primary = nil
+      local secondary = nil
+
+      if key == "left" and dx < 0 then
+        primary = -dx
+        secondary = math.abs(dy)
+      elseif key == "right" and dx > 0 then
+        primary = dx
+        secondary = math.abs(dy)
+      elseif key == "up" and dy < 0 then
+        primary = -dy
+        secondary = math.abs(dx)
+      elseif key == "down" and dy > 0 then
+        primary = dy
+        secondary = math.abs(dx)
+      end
+
+      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = character.column
+        bestRow = character.row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:moveGrappleTargetByKey(activeCharacter, key)
+  self.grappleTarget.column, self.grappleTarget.row = self:selectGrappleTargetInDirection(
+    self.grappleTarget.column,
+    self.grappleTarget.row,
+    key
+  )
+end
+
 function Battle:confirmHeal(activeCharacter)
   if not self:isHealable(self.healTarget.column, self.healTarget.row) then
     return false
@@ -870,6 +1003,65 @@ function Battle:confirmHeal(activeCharacter)
   if self.effects then
     self.effects:startHealAnimation(activeCharacter, target)
   end
+  return true
+end
+
+function Battle:getBestGrappleDestination(activeCharacter, target)
+  local bestColumn = nil
+  local bestRow = nil
+  local bestDistance = nil
+
+  for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
+    local column = neighbor[1]
+    local row = neighbor[2]
+    if self:isWalkableStep(column, row, target) then
+      local distance = self:getTileDistance(column, row, target.column, target.row)
+      if distance and (bestDistance == nil or distance < bestDistance) then
+        bestDistance = distance
+        bestColumn = column
+        bestRow = row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:confirmGrapple(activeCharacter)
+  if not self:isGrappleable(self.grappleTarget.column, self.grappleTarget.row) then
+    return false
+  end
+
+  local target = self:getCharacterAt(self.grappleTarget.column, self.grappleTarget.row, activeCharacter)
+  if not target or target == activeCharacter then
+    return false
+  end
+
+  local destinationColumn, destinationRow = self:getBestGrappleDestination(activeCharacter, target)
+  if not destinationColumn or not destinationRow then
+    return false
+  end
+
+  self.grappleRange = {}
+  self.grappleTargets = {}
+
+  if destinationColumn == target.column and destinationRow == target.row then
+    self.mode = "menu"
+    self.completedActionCharacter = activeCharacter
+    return true
+  end
+
+  self.mode = "grapple_animating"
+  self.grappleAnimation = {
+    actor = activeCharacter,
+    target = target,
+    fromColumn = target.column,
+    fromRow = target.row,
+    toColumn = destinationColumn,
+    toRow = destinationRow,
+    timer = 0,
+    duration = 0.35,
+  }
   return true
 end
 
@@ -1168,6 +1360,12 @@ function Battle:cancelHealMode()
   self.healTargets = {}
 end
 
+function Battle:cancelGrappleMode()
+  self.mode = "menu"
+  self.grappleRange = {}
+  self.grappleTargets = {}
+end
+
 function Battle:update(dt)
   self:updateDamagePopups(dt)
 
@@ -1220,6 +1418,20 @@ function Battle:update(dt)
     if completedHealer then
       self.mode = "menu"
       self.completedActionCharacter = completedHealer
+      return
+    end
+    return
+  end
+
+  if self.grappleAnimation then
+    local animation = self.grappleAnimation
+    animation.timer = animation.timer + dt
+    if animation.timer >= animation.duration then
+      animation.target:setPosition(animation.toColumn, animation.toRow)
+      self:updateCharacterDirection(animation.target, animation.fromColumn, animation.toColumn)
+      self.grappleAnimation = nil
+      self.mode = "menu"
+      self.completedActionCharacter = animation.actor
       return
     end
     return

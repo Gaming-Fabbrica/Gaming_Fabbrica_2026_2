@@ -222,6 +222,24 @@ function Character.getAttackRenderState(character, battle, gridToScreen, tileW)
   return nil
 end
 
+function Character.getGrappleRenderState(character, battle, gridToScreen)
+  if not battle then
+    return nil
+  end
+
+  local animation = battle:getGrappleAnimation()
+  if not animation or animation.target ~= character then
+    return nil
+  end
+
+  local fromX, fromY = gridToScreen(animation.fromColumn, animation.fromRow)
+  local toX, toY = gridToScreen(animation.toColumn, animation.toRow)
+  local ratio = math.min(1, animation.timer / animation.duration)
+  local x = fromX + ((toX - fromX) * ratio)
+  local y = fromY + ((toY - fromY) * ratio)
+  return x, y, 0, 1, 1, 1
+end
+
 function Character.getDeathRenderState(character, battle, gridToScreen)
   if not battle then
     return nil
@@ -256,6 +274,11 @@ function Character.getAnimatedRenderState(character, battle, gridToScreen, tileW
   x, y, jumpOffset = Character.getAttackRenderState(character, battle, gridToScreen, tileW)
   if x then
     return x, y, jumpOffset or 0, 1, 1, 1
+  end
+
+  x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = Character.getGrappleRenderState(character, battle, gridToScreen)
+  if x then
+    return x, y, jumpOffset or 0, scaleXFactor or 1, scaleYFactor or 1, alpha or 1
   end
 
   return nil

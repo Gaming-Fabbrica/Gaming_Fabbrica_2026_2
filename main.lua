@@ -534,6 +534,7 @@ function love.update(dt)
 
   local active = getActiveCharacter()
   Menu:setCanHeal(active and battle and battle:getTurnPhase() == "move" and battle:isHealer(active))
+  Menu:setCanGrapple(active and battle and battle:getTurnPhase() == "action" and battle:isGrappler(active))
   if active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
       if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
@@ -618,7 +619,7 @@ function love.update(dt)
     local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
     local focusRow = active.row
-    if gameMode == "move" or gameMode == "attack" or gameMode == "heal" then
+    if gameMode == "move" or gameMode == "attack" or gameMode == "heal" or gameMode == "grapple" then
       focusColumn, focusRow = battle:getCursorColumnRow(active)
     end
 
@@ -628,6 +629,13 @@ function love.update(dt)
       if animatedX then
         tileX = animatedX
         tileY = animatedY
+      end
+    elseif battle and battle:getGrappleAnimation() then
+      local grappleAnimation = battle:getGrappleAnimation()
+      local grappleX, grappleY = Character.getGrappleRenderState(grappleAnimation.target, battle, gridToScreen)
+      if grappleX then
+        tileX = grappleX
+        tileY = grappleY
       end
     elseif battle and battle:getHealAnimation() then
       local activeHealAnimation = battle:getHealAnimation()
@@ -687,7 +695,7 @@ function love.draw()
   elseif active and active.team == "player" and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
-    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
       hoverColumn, hoverRow = battle:getCursorColumnRow(active)
     end
     hoveredCharacter = Character.getAtTile(characters, hoverColumn, hoverRow)
@@ -716,6 +724,11 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(attackTile, x, y)
         love.graphics.setColor(1, 1, 1, 1)
+      elseif active and battle and battle:isGrappleMode() and battle:isInGrappleRange(c, r) then
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(attackTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
       end
     end
   end
@@ -726,7 +739,7 @@ function love.draw()
 
   if active and active.team == "player" and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
-    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
       cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
@@ -954,6 +967,21 @@ function love.keypressed(key)
       end
       Menu:reset()
     end
+  elseif gameMode == "grapple" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      if battle and active then
+        battle:moveGrappleTargetByKey(active, key)
+      end
+    elseif key == "return" or key == "kpenter" or key == "enter" then
+      if battle and active and battle:confirmGrapple(active) then
+        Menu:reset()
+      end
+    elseif key == "backspace" then
+      if battle then
+        battle:cancelGrappleMode()
+      end
+      Menu:reset()
+    end
   elseif gameMode == "attack" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
@@ -986,6 +1014,10 @@ function love.keypressed(key)
         if selectedAction == "Se battre" then
           if not battle:startAttackSelection(active) then
             advanceTurn(active)
+          end
+        elseif selectedAction == "Grapin" then
+          if battle:startGrappleSelection(active) then
+            Menu:reset()
           end
         elseif selectedAction == "Passer son tour" then
           advanceTurn(active)
