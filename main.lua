@@ -53,6 +53,9 @@ local gamepadInitialRepeatDelay = 0.22
 local gamepadRepeatDelay = 0.12
 local gamepadHeldDirection = nil
 local gamepadRepeatTimer = 0
+local rumbleTimer = 0
+local rumbleLow = 0
+local rumbleHigh = 0
 
 local map = {}
 local obstacles = {}
@@ -490,6 +493,27 @@ local function advanceTurn(activeCharacter)
   Menu:reset()
 end
 
+local function getActiveGamepad()
+  local joysticks = love.joystick.getJoysticks()
+  for _, joystick in ipairs(joysticks) do
+    if joystick:isGamepad() and joystick:isVibrationSupported() then
+      return joystick
+    end
+  end
+  return nil
+end
+
+local function pulseRumble(low, high, duration)
+  local joystick = getActiveGamepad()
+  if not joystick then
+    return
+  end
+  rumbleLow = low or 0
+  rumbleHigh = high or 0
+  rumbleTimer = duration or 0.08
+  joystick:setVibration(rumbleLow, rumbleHigh)
+end
+
 local function handleDirectionalInput(direction)
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
@@ -499,19 +523,25 @@ local function handleDirectionalInput(direction)
 
   if gameMode == "move" then
     battle:moveTargetByKey(direction)
+    pulseRumble(0.08, 0.04, 0.05)
   elseif gameMode == "heal" then
     battle:moveHealTargetByKey(active, direction)
+    pulseRumble(0.08, 0.04, 0.05)
   elseif gameMode == "tank" then
     return
   elseif gameMode == "grapple" then
     battle:moveGrappleTargetByKey(active, direction)
+    pulseRumble(0.08, 0.04, 0.05)
   elseif gameMode == "attack" then
     battle:moveAttackTargetByKey(active, direction)
+    pulseRumble(0.08, 0.04, 0.05)
   else
     if direction == "up" then
       Menu:prev()
+      pulseRumble(0.07, 0.03, 0.05)
     elseif direction == "down" then
       Menu:next()
+      pulseRumble(0.07, 0.03, 0.05)
     end
   end
 end
@@ -637,6 +667,18 @@ function love.load()
 end
 
 function love.update(dt)
+  if rumbleTimer > 0 then
+    rumbleTimer = math.max(0, rumbleTimer - dt)
+    if rumbleTimer <= 0 then
+      local joystick = getActiveGamepad()
+      if joystick then
+        joystick:setVibration(0, 0)
+      end
+      rumbleLow = 0
+      rumbleHigh = 0
+    end
+  end
+
   if slowMotionTimer > 0 then
     slowMotionTimer = math.max(0, slowMotionTimer - dt)
     if slowMotionTimer <= 0 then
@@ -675,6 +717,7 @@ function love.update(dt)
     local screenShake = battle:consumeScreenShake()
     if screenShake and camera then
       camera:startShake(screenShake.duration, screenShake.amplitude)
+      pulseRumble(0.45, 0.8, math.min(0.22, screenShake.duration or 0.22))
     end
     local slowMotion = battle:consumeSlowMotion()
     if slowMotion then
