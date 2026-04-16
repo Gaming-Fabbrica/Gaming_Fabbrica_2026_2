@@ -478,7 +478,11 @@ local function advanceTurn(activeCharacter)
   if activeIndex then
     currentTurn = (activeIndex % #characters) + 1
   else
-    currentTurn = math.max(1, math.min(currentTurn, #characters))
+    if currentTurn > #characters then
+      currentTurn = 1
+    else
+      currentTurn = math.max(1, currentTurn)
+    end
   end
 
   if battle then
