@@ -26,6 +26,8 @@ function Battle.new(cols, rows, map)
     deathAnimation = nil,
     deathQueue = nil,
     completedActionCharacter = nil,
+    returnToMoveAfterAction = false,
+    actionSpent = false,
     pendingScreenShake = nil,
     pendingSlowMotion = nil,
     moveStepDuration = 0.6,
@@ -105,6 +107,8 @@ function Battle:startTurn()
   self.deathQueue = nil
   self.movingCharacter = nil
   self.completedActionCharacter = nil
+  self.returnToMoveAfterAction = false
+  self.actionSpent = false
 end
 
 function Battle:getThorns()
@@ -160,6 +164,56 @@ function Battle:startActionPhase()
   self.grappleRange = {}
   self.grappleTargets = {}
   self.movingCharacter = nil
+end
+
+function Battle:isActionFirstCapable(character)
+  return character and character.team == "player" and character.className == "atk_mov"
+end
+
+function Battle:hasActionSpent()
+  return self.actionSpent == true
+end
+
+function Battle:beginActionFirstTurn(character)
+  if self.turnPhase ~= "move" or self.actionSpent or not self:isActionFirstCapable(character) then
+    return false
+  end
+  self.returnToMoveAfterAction = true
+  self.turnPhase = "action"
+  self.mode = "menu"
+  self.moveRange = {}
+  self.attackRange = {}
+  self.healTargets = {}
+  self.grappleRange = {}
+  self.grappleTargets = {}
+  self.movingCharacter = nil
+  return true
+end
+
+function Battle:completeAction(actor)
+  if self.returnToMoveAfterAction then
+    self.returnToMoveAfterAction = false
+    self.actionSpent = true
+    self.turnPhase = "move"
+    self.mode = "menu"
+    self.attackRange = {}
+    self.healTargets = {}
+    self.grappleRange = {}
+    self.grappleTargets = {}
+    self.movingCharacter = nil
+    return
+  end
+  self.mode = "menu"
+  self.completedActionCharacter = actor
+end
+
+function Battle:completeMovePhase(actor)
+  if self.actionSpent then
+    self.mode = "menu"
+    self.completedActionCharacter = actor
+    return
+  end
+  self:startActionPhase()
 end
 
 function Battle:setMode(mode)
@@ -1391,7 +1445,7 @@ function Battle:update(dt)
         if self:applyLandingTileEffects(animation.character, finalNode.column, finalNode.row) then
           return
         end
-        self:startActionPhase()
+        self:completeMovePhase(animation.character)
         return
       end
 
@@ -1416,8 +1470,7 @@ function Battle:update(dt)
   if self:getHealAnimation() then
     local completedHealer = self.effects and self.effects:updateHealAnimation(dt) or nil
     if completedHealer then
-      self.mode = "menu"
-      self.completedActionCharacter = completedHealer
+      self:completeAction(completedHealer)
       return
     end
     return
@@ -1430,8 +1483,7 @@ function Battle:update(dt)
       animation.target:setPosition(animation.toColumn, animation.toRow)
       self:updateCharacterDirection(animation.target, animation.fromColumn, animation.toColumn)
       self.grappleAnimation = nil
-      self.mode = "menu"
-      self.completedActionCharacter = animation.actor
+      self:completeAction(animation.actor)
       return
     end
     return
@@ -1522,8 +1574,7 @@ function Battle:update(dt)
         return
       end
       self.attackAnimation = nil
-      self.mode = "menu"
-      self.completedActionCharacter = animation.attacker
+      self:completeAction(animation.attacker)
       return
     end
     return
@@ -1545,8 +1596,7 @@ function Battle:update(dt)
       else
         self.deathAnimation = nil
         self.deathQueue = nil
-        self.mode = "menu"
-        self.completedActionCharacter = animation.attacker
+        self:completeAction(animation.attacker)
       end
     end
   end

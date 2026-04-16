@@ -534,6 +534,13 @@ function love.update(dt)
 
   local active = getActiveCharacter()
   Menu:setCanHeal(active and battle and battle:getTurnPhase() == "move" and battle:isHealer(active))
+  Menu:setCanActionFirst(
+    active
+    and battle
+    and battle:getTurnPhase() == "move"
+    and battle:isActionFirstCapable(active)
+    and not battle:hasActionSpent()
+  )
   Menu:setCanGrapple(active and battle and battle:getTurnPhase() == "action" and battle:isGrappler(active))
   if active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
@@ -1003,24 +1010,32 @@ function love.keypressed(key)
       if battle and battle:getTurnPhase() == "move" then
         if Menu:isMoveSelected() then
           battle:startMoveSelection(active)
+        elseif selectedAction == "Se battre" then
+          if battle:beginActionFirstTurn(active) then
+            Menu:reset()
+          end
         elseif selectedAction == "Soigner" then
           if battle:startHealSelection(active) then
             Menu:reset()
           end
         elseif selectedAction == "Rester ici" then
-          battle:startActionPhase()
+          if battle:hasActionSpent() then
+            advanceTurn(active)
+          else
+            battle:startActionPhase()
+          end
         end
       elseif battle and battle:getTurnPhase() == "action" then
         if selectedAction == "Se battre" then
           if not battle:startAttackSelection(active) then
-            advanceTurn(active)
+            battle:completeAction(active)
           end
         elseif selectedAction == "Grapin" then
           if battle:startGrappleSelection(active) then
             Menu:reset()
           end
         elseif selectedAction == "Passer son tour" then
-          advanceTurn(active)
+          battle:completeAction(active)
         end
       end
     end
