@@ -48,6 +48,11 @@ local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
 local enemyAttackPreviewDelay = 0.55
 local enemySkipActionDelay = 0.3
+local gamepadAxisThreshold = 0.45
+local gamepadInitialRepeatDelay = 0.22
+local gamepadRepeatDelay = 0.12
+local gamepadHeldDirection = nil
+local gamepadRepeatTimer = 0
 
 local map = {}
 local obstacles = {}
@@ -485,6 +490,148 @@ local function advanceTurn(activeCharacter)
   Menu:reset()
 end
 
+local function handleDirectionalInput(direction)
+  local active = getActiveCharacter()
+  local gameMode = battle and battle:getMode() or "menu"
+  if battleResult or not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+    return
+  end
+
+  if gameMode == "move" then
+    battle:moveTargetByKey(direction)
+  elseif gameMode == "heal" then
+    battle:moveHealTargetByKey(active, direction)
+  elseif gameMode == "tank" then
+    return
+  elseif gameMode == "grapple" then
+    battle:moveGrappleTargetByKey(active, direction)
+  elseif gameMode == "attack" then
+    battle:moveAttackTargetByKey(active, direction)
+  else
+    if direction == "up" then
+      Menu:prev()
+    elseif direction == "down" then
+      Menu:next()
+    end
+  end
+end
+
+local function handleConfirmInput()
+  local active = getActiveCharacter()
+  local gameMode = battle and battle:getMode() or "menu"
+  if battleResult then
+    resetGame()
+    return
+  end
+  if not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+    return
+  end
+
+  if gameMode == "move" then
+    local didMove = battle and battle:confirmMove(active)
+    if didMove then
+      Menu:reset()
+    end
+  elseif gameMode == "heal" then
+    if battle and battle:confirmHeal(active) then
+      Menu:reset()
+    end
+  elseif gameMode == "tank" then
+    if battle and battle:confirmTank(active) then
+      Menu:reset()
+    end
+  elseif gameMode == "grapple" then
+    if battle and battle:confirmGrapple(active) then
+      Menu:reset()
+    end
+  elseif gameMode == "attack" then
+    if battle then
+      battle:confirmAttack(active)
+    end
+  else
+    local selectedAction = Menu:selectedAction()
+    if battle and battle:getTurnPhase() == "move" then
+      if Menu:isMoveSelected() then
+        battle:startMoveSelection(active)
+      elseif selectedAction == "Tank" then
+        if battle:startTankSelection(active) then
+          Menu:reset()
+        end
+      elseif selectedAction == "Se battre" then
+        if battle:beginActionFirstTurn(active) then
+          Menu:reset()
+        end
+      elseif selectedAction == "Soigner" then
+        if battle:startHealSelection(active) then
+          Menu:reset()
+        end
+      elseif selectedAction == "Rester ici" then
+        if battle:hasActionSpent() then
+          advanceTurn(active)
+        else
+          battle:startActionPhase()
+        end
+      end
+    elseif battle and battle:getTurnPhase() == "action" then
+      if selectedAction == "Se battre" then
+        if not battle:startAttackSelection(active) then
+          battle:completeAction(active)
+        end
+      elseif selectedAction == "Grapin" then
+        if battle:startGrappleSelection(active) then
+          Menu:reset()
+        end
+      elseif selectedAction == "Passer son tour" then
+        battle:completeAction(active)
+      end
+    end
+  end
+end
+
+local function handleCancelInput()
+  local active = getActiveCharacter()
+  local gameMode = battle and battle:getMode() or "menu"
+  if battleResult or not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+    return
+  end
+
+  if gameMode == "move" then
+    battle:cancelMoveMode()
+    Menu:reset()
+  elseif gameMode == "heal" then
+    battle:cancelHealMode()
+    Menu:reset()
+  elseif gameMode == "tank" then
+    battle:setMode("menu")
+    Menu:reset()
+  elseif gameMode == "grapple" then
+    battle:cancelGrappleMode()
+    Menu:reset()
+  elseif gameMode == "attack" then
+    battle:cancelAttackMode()
+    Menu:reset()
+  end
+end
+
+local function readGamepadDirection()
+  local joysticks = love.joystick.getJoysticks()
+  for _, joystick in ipairs(joysticks) do
+    if joystick:isGamepad() then
+      local x = joystick:getGamepadAxis("leftx")
+      local y = joystick:getGamepadAxis("lefty")
+      if math.abs(x) >= gamepadAxisThreshold or math.abs(y) >= gamepadAxisThreshold then
+        if math.abs(x) > math.abs(y) then
+          return x < 0 and "left" or "right"
+        else
+          return y < 0 and "up" or "down"
+        end
+      end
+      break
+    end
+  end
+  return nil
+end
+
 function love.load()
   resetGame()
 end
@@ -505,6 +652,22 @@ function love.update(dt)
   if battleResult then
     battleResultTimer = math.min(battleResultDuration, battleResultTimer + dt)
     return
+  end
+
+  local gamepadDirection = readGamepadDirection()
+  if gamepadDirection ~= gamepadHeldDirection then
+    gamepadHeldDirection = gamepadDirection
+    gamepadRepeatTimer = 0
+    if gamepadDirection then
+      handleDirectionalInput(gamepadDirection)
+      gamepadRepeatTimer = gamepadInitialRepeatDelay
+    end
+  elseif gamepadHeldDirection then
+    gamepadRepeatTimer = gamepadRepeatTimer - dt
+    if gamepadRepeatTimer <= 0 then
+      handleDirectionalInput(gamepadHeldDirection)
+      gamepadRepeatTimer = gamepadRepeatDelay
+    end
   end
 
   if battle then
@@ -967,14 +1130,20 @@ function love.draw()
 end
 
 function love.keypressed(key)
-  local active = getActiveCharacter()
-  local gameMode = battle and battle:getMode() or "menu"
   if key == "escape" then
     love.event.quit()
-  elseif battleResult then
-    if key == "return" or key == "kpenter" or key == "enter" then
-      resetGame()
-    end
+    return
+  elseif key == "return" or key == "kpenter" or key == "enter" then
+    handleConfirmInput()
+    return
+  elseif key == "backspace" then
+    handleCancelInput()
+    return
+  end
+
+  local active = getActiveCharacter()
+  local gameMode = battle and battle:getMode() or "menu"
+  if battleResult then
     return
   elseif active and active.team ~= "player" then
     -- disable player input during enemy turns
@@ -985,116 +1154,24 @@ function love.keypressed(key)
       if battle then
         battle:moveTargetByKey(key)
       end
-    elseif key == "return" or key == "kpenter" or key == "enter" then
-      if active then
-        local didMove = false
-        if battle then
-          didMove = battle:confirmMove(active)
-        end
-        if didMove then
-          Menu:reset()
-        end
-      end
-    elseif key == "backspace" then
-      -- cancel move mode and keep current turn
-      if battle then
-        battle:cancelMoveMode()
-      end
-      Menu:reset()
     end
   elseif gameMode == "heal" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
         battle:moveHealTargetByKey(active, key)
       end
-    elseif key == "return" or key == "kpenter" or key == "enter" then
-      if battle and active and battle:confirmHeal(active) then
-        Menu:reset()
-      end
-    elseif key == "backspace" then
-      if battle then
-        battle:cancelHealMode()
-      end
-      Menu:reset()
     end
   elseif gameMode == "tank" then
-    if key == "return" or key == "kpenter" or key == "enter" then
-      if battle and active and battle:confirmTank(active) then
-        Menu:reset()
-      end
-    elseif key == "backspace" then
-      if battle then
-        battle:setMode("menu")
-      end
-      Menu:reset()
-    end
   elseif gameMode == "grapple" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
         battle:moveGrappleTargetByKey(active, key)
       end
-    elseif key == "return" or key == "kpenter" or key == "enter" then
-      if battle and active and battle:confirmGrapple(active) then
-        Menu:reset()
-      end
-    elseif key == "backspace" then
-      if battle then
-        battle:cancelGrappleMode()
-      end
-      Menu:reset()
     end
   elseif gameMode == "attack" then
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
         battle:moveAttackTargetByKey(active, key)
-      end
-    elseif key == "return" or key == "kpenter" or key == "enter" then
-      if battle and active then
-        battle:confirmAttack(active)
-      end
-    elseif key == "backspace" then
-      if battle then
-        battle:cancelAttackMode()
-      end
-      Menu:reset()
-    end
-  elseif key == "return" or key == "kpenter" or key == "enter" then
-    if active then
-      local selectedAction = Menu:selectedAction()
-      if battle and battle:getTurnPhase() == "move" then
-        if Menu:isMoveSelected() then
-          battle:startMoveSelection(active)
-        elseif selectedAction == "Tank" then
-          if battle:startTankSelection(active) then
-            Menu:reset()
-          end
-        elseif selectedAction == "Se battre" then
-          if battle:beginActionFirstTurn(active) then
-            Menu:reset()
-          end
-        elseif selectedAction == "Soigner" then
-          if battle:startHealSelection(active) then
-            Menu:reset()
-          end
-        elseif selectedAction == "Rester ici" then
-          if battle:hasActionSpent() then
-            advanceTurn(active)
-          else
-            battle:startActionPhase()
-          end
-        end
-      elseif battle and battle:getTurnPhase() == "action" then
-        if selectedAction == "Se battre" then
-          if not battle:startAttackSelection(active) then
-            battle:completeAction(active)
-          end
-        elseif selectedAction == "Grapin" then
-          if battle:startGrappleSelection(active) then
-            Menu:reset()
-          end
-        elseif selectedAction == "Passer son tour" then
-          battle:completeAction(active)
-        end
       end
     end
   elseif key == "up" then
@@ -1109,5 +1186,25 @@ function love.keypressed(key)
     Menu:setIndex(3)
   elseif key == "4" then
     Menu:setIndex(4)
+  end
+end
+
+function love.gamepadpressed(joystick, button)
+  if not joystick:isGamepad() then
+    return
+  end
+
+  if button == "a" then
+    handleConfirmInput()
+  elseif button == "b" then
+    handleCancelInput()
+  elseif button == "dpleft" then
+    handleDirectionalInput("left")
+  elseif button == "dpright" then
+    handleDirectionalInput("right")
+  elseif button == "dpup" then
+    handleDirectionalInput("up")
+  elseif button == "dpdown" then
+    handleDirectionalInput("down")
   end
 end
