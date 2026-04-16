@@ -41,28 +41,10 @@ function Character.getFrenchClassName(className)
   return Character.frenchClassNames[className] or className or "Inconnu"
 end
 
-function Character.rollStats(totalPoints)
-  local stats = {
-    hp = 2,
-    mov = 2,
-    def = 2,
-    atk = 2,
-  }
-  local statKeys = {"hp", "mov", "def", "atk"}
-  local pointsToAssign = math.max(0, (totalPoints or 16) - 8)
-
-  for _ = 1, pointsToAssign do
-    local key = statKeys[math.random(#statKeys)]
-    stats[key] = stats[key] + 1
-  end
-
-  return stats
-end
-
 function Character.rollHeroStats(className)
   local baseStats = Character.heroBaseStats[className]
   if not baseStats then
-    return Character.rollStats(16)
+    error("Missing hero base stats for class: " .. tostring(className))
   end
 
   local stats = {
@@ -73,7 +55,7 @@ function Character.rollHeroStats(className)
   }
   local statKeys = {"hp", "mov", "def", "atk"}
 
-  for _ = 1, 4 do
+  for _ = 1, 3 do
     local key = statKeys[math.random(#statKeys)]
     stats[key] = stats[key] + 1
   end
@@ -123,7 +105,7 @@ function Character.getCurrentAttackActors(battle)
 end
 
 function Character.new(name, spritePath, column, row, stats, direction, className, team)
-  local resolvedStats = stats or Character.rollStats(16)
+  local resolvedStats = stats or {}
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
   local resolvedTeam = team or "player"
