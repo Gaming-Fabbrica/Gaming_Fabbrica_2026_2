@@ -39,6 +39,7 @@ local introFadeAlpha = 0
 local introFadeDuration = 0.8
 local slowMotionTimer = 0
 local slowMotionScale = 1
+local isWeb = false
 local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
@@ -56,6 +57,7 @@ local gamepadRepeatTimer = 0
 local rumbleTimer = 0
 local rumbleLow = 0
 local rumbleHigh = 0
+local allowGamepadRumble = true
 
 local map = {}
 local obstacles = {}
@@ -79,7 +81,7 @@ local availableClasses = {
 }
 
 local enemyArchetypes = {
-  {name = "affamé", file = "affamé.png", stats = {hp = 7, mov = 4, def = 1, atk = 5, attackRange = 2}},
+  {name = "affame", file = "affame.png", stats = {hp = 7, mov = 4, def = 1, atk = 5, attackRange = 2}},
   {name = "embourbe", file = "embourbe.png", stats = {hp = 10, mov = 2, def = 4, atk = 2}},
   {name = "loup1", file = "loup1.png", stats = {hp = 5, mov = 5, def = 1, atk = 5}},
   {name = "loup2", file = "loup2.png", stats = {hp = 7, mov = 5, def = 1, atk = 4}},
@@ -175,11 +177,17 @@ local function resetGame()
   local screenW = love.graphics.getWidth()
   local screenH = love.graphics.getHeight()
   if not windowInitialized then
-    screenW, screenH = love.window.getDesktopDimensions(1)
-    love.window.setMode(screenW, screenH, {
-      fullscreen = true,
-      fullscreentype = "desktop",
-    })
+    if isWeb then
+      love.window.setMode(1280, 720, {
+        resizable = true,
+      })
+    else
+      screenW, screenH = love.window.getDesktopDimensions(1)
+      love.window.setMode(screenW, screenH, {
+        fullscreen = true,
+        fullscreentype = "desktop",
+      })
+    end
     screenW = love.graphics.getWidth()
     screenH = love.graphics.getHeight()
     windowInitialized = true
@@ -503,6 +511,9 @@ local function getActiveGamepad()
 end
 
 local function pulseRumble(low, high, duration)
+  if not allowGamepadRumble then
+    return
+  end
   local joystick = getActiveGamepad()
   if not joystick then
     return
@@ -662,11 +673,13 @@ local function readGamepadDirection()
 end
 
 function love.load()
+  isWeb = love.system.getOS() == "Web"
+  allowGamepadRumble = not isWeb
   resetGame()
 end
 
 function love.update(dt)
-  if rumbleTimer > 0 then
+  if allowGamepadRumble and rumbleTimer > 0 then
     rumbleTimer = math.max(0, rumbleTimer - dt)
     if rumbleTimer <= 0 then
       local joystick = getActiveGamepad()

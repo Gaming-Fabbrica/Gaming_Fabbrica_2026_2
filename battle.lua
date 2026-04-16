@@ -771,7 +771,7 @@ function Battle:getAttackableTiles(activeCharacter)
 end
 
 function Battle:isSplashAttacker(character)
-  return character and character.team == "enemy" and character.className == "affamé"
+  return character and character.team == "enemy" and character.className == "affame"
 end
 
 function Battle:getSplashAreaTiles(centerColumn, centerRow)
