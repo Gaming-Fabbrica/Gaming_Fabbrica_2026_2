@@ -20,9 +20,9 @@ Character.frenchClassNames = {
   ["serpent acrobate"] = "Serpent acrobate",
   serpentroche = "Serpent de roche",
   serpentsoleil = "Serpent-soleil",
-  trauma = "Trauma",
-  trauma2 = "Angoisse",
-  trauma3 = "Trauma",
+  trauma = "Terreur",
+  trauma2 = "Trauma",
+  trauma3 = "Angoisse",
 }
 
 function Character.getFrenchClassName(className)
