@@ -111,6 +111,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local resolvedTeam = team or "player"
   local provokeSprite = nil
   local attackSprite = nil
+  local castSprite = nil
   if resolvedTeam == "player" and resolvedClassName == "tank" then
     local provokePath = spritePath:gsub("%.png$", "_provoke.png")
     provokeSprite = love.graphics.newImage(provokePath)
@@ -119,6 +120,12 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     local attackPath = spritePath:gsub("%.png$", "_attack.png")
     if love.filesystem.getInfo(attackPath) then
       attackSprite = love.graphics.newImage(attackPath)
+    end
+  end
+  if resolvedTeam == "player" and resolvedClassName == "healer" then
+    local castPath = spritePath:gsub("%.png$", "_cast.png")
+    if love.filesystem.getInfo(castPath) then
+      castSprite = love.graphics.newImage(castPath)
     end
   end
   local instance = {
@@ -140,6 +147,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     spriteFacing = resolvedStats.spriteFacing or (resolvedTeam == "enemy" and "left" or "right"),
     provokeSprite = provokeSprite,
     attackSprite = attackSprite,
+    castSprite = castSprite,
   }
   return setmetatable(instance, Character)
 end
@@ -393,6 +401,7 @@ function Character.buildDrawList(characters, battle, gridToScreen, tileW, tileH,
       character = character,
       spriteOverride =
         ((currentAttackAttacker == character) and character.attackSprite)
+        or ((healAnimation and healAnimation.healer == character) and character.castSprite)
         or (((tankAnimation and tankAnimation.tank == character) or (tankEffect and tankEffect.tank == character)) and character.provokeSprite)
         or nil,
       x = x,
