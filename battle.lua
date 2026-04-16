@@ -1335,6 +1335,7 @@ function Battle:moveTargetByKey(key)
   local nextRow = self.moveTarget.row
   local neighbors = self:getHexNeighbors(self.moveTarget.column, self.moveTarget.row)
   local candidates = {}
+  local isEvenColumn = (self.moveTarget.column % 2 == 0)
 
   if key == "left" then
     candidates[1] = neighbors[2]
@@ -1344,10 +1345,22 @@ function Battle:moveTargetByKey(key)
     candidates[2] = neighbors[5]
   elseif key == "up" then
     candidates[1] = neighbors[3]
-    candidates[2] = neighbors[5]
+    if isEvenColumn then
+      candidates[2] = neighbors[5]
+      candidates[3] = neighbors[6]
+    else
+      candidates[2] = neighbors[1]
+      candidates[3] = neighbors[2]
+    end
   elseif key == "down" then
     candidates[1] = neighbors[4]
-    candidates[2] = neighbors[6]
+    if isEvenColumn then
+      candidates[2] = neighbors[1]
+      candidates[3] = neighbors[2]
+    else
+      candidates[2] = neighbors[5]
+      candidates[3] = neighbors[6]
+    end
   end
 
   for _, candidate in ipairs(candidates) do
