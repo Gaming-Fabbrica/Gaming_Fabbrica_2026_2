@@ -1419,7 +1419,7 @@ function Battle:calculateDamage(attacker, defender)
   if self:isBackAttack(attacker, defender) then
     damage = math.max(1, attacker.atk)
   else
-    damage = math.max(0, attacker.atk - defender.def)
+    damage = math.max(1, attacker.atk - defender.def)
   end
   if critical then
     damage = damage + 2

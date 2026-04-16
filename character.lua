@@ -26,15 +26,15 @@ Character.frenchClassNames = {
 }
 
 Character.heroBaseStats = {
-  archer = {hp = 4, mov = 5, def = 1, atk = 4},
-  atk_mov = {hp = 4, mov = 5, def = 2, atk = 5},
-  counter = {hp = 5, mov = 4, def = 3, atk = 4},
-  free = {hp = 5, mov = 4, def = 2, atk = 4},
-  grab = {hp = 4, mov = 5, def = 2, atk = 5},
-  healer = {hp = 4, mov = 4, def = 1, atk = 2},
-  lancer = {hp = 5, mov = 4, def = 2, atk = 4},
-  tactician = {hp = 6, mov = 3, def = 3, atk = 5},
-  tank = {hp = 7, mov = 3, def = 4, atk = 4},
+  archer = {hp = 4, mov = 5, def = 1, atk = 3},
+  atk_mov = {hp = 4, mov = 5, def = 2, atk = 4},
+  counter = {hp = 5, mov = 4, def = 3, atk = 3},
+  free = {hp = 5, mov = 4, def = 2, atk = 3},
+  grab = {hp = 4, mov = 5, def = 2, atk = 4},
+  healer = {hp = 4, mov = 4, def = 1, atk = 1},
+  lancer = {hp = 5, mov = 4, def = 2, atk = 3},
+  tactician = {hp = 6, mov = 3, def = 3, atk = 4},
+  tank = {hp = 7, mov = 3, def = 4, atk = 3},
 }
 
 function Character.getFrenchClassName(className)
