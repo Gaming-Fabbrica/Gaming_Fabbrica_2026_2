@@ -1435,18 +1435,33 @@ function Battle:isMeleeAttack(attacker, defender)
 end
 
 function Battle:canCounterAttack(attacker, defender)
-  return
-    attacker
-    and defender
-    and defender.className == "counter"
-    and defender.hp > 0
-    and self:isMeleeAttack(attacker, defender)
+  if not attacker or not defender or defender.hp <= 0 then
+    return false
+  end
+
+  if defender.className == "counter" and self:isMeleeAttack(attacker, defender) then
+    return true
+  end
+
+  if defender.team == "enemy" and attacker.team == "player" then
+    local counterRange = defender.attackRange or 1
+    local distance = self:getTileDistance(defender.column, defender.row, attacker.column, attacker.row)
+    return distance ~= nil and distance <= counterRange
+  end
+
+  return false
 end
 
 function Battle:calculateCounterDamage(attacker, defender)
+  if defender and defender.team == "enemy" then
+    local counterAtk = math.floor((defender.atk or 0) * 0.5)
+    local targetDef = attacker and attacker.def or 0
+    return math.max(0, counterAtk - targetDef)
+  end
+
   local attackerAtk = attacker and attacker.atk or 0
   local attackerDef = attacker and attacker.def or 0
-  return math.max(1, attackerAtk - attackerDef)
+  return math.max(0, attackerAtk - attackerDef)
 end
 
 function Battle:defeatCharacter(target)
