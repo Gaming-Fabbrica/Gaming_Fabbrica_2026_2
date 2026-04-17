@@ -5,9 +5,11 @@ local Battle = require("battle")
 local Lifebar = require("lifebar")
 local Obstacle = require("obstacle")
 local Effects = require("effects")
+local Rules = require("rules")
 
 local cols = 20
 local rows = 20
+local PVP = Rules.PVP
 
 local mapBackground = nil
 local tile = nil
@@ -47,6 +49,10 @@ local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
 local loadSprites = nil
+
+local function isHumanControlledCharacter(character)
+  return character ~= nil and (PVP or character.team == "player")
+end
 
 local enemyMovePreviewDelay = 0.9
 local enemyPostMoveDelay = 0.45
@@ -146,6 +152,16 @@ local function hasLivingTeam(teamName)
   return false
 end
 
+local function getWinningTeam()
+  if hasLivingTeam("player") and not hasLivingTeam("enemy") then
+    return "player"
+  end
+  if hasLivingTeam("enemy") and not hasLivingTeam("player") then
+    return "enemy"
+  end
+  return nil
+end
+
 local function beginBattleResult(result)
   if battleResult then
     return
@@ -181,8 +197,9 @@ local function resetGame()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
+  local activeEnemySpawnCount = PVP and playerSpawnCount or enemySpawnCount
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
-  local enemySpawnPositions = generateSpawnPositions(enemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
+  local enemySpawnPositions = generateSpawnPositions(activeEnemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
   local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
 
   for c = 1, cols do
@@ -447,6 +464,33 @@ end
 
 loadSprites = function(playerSpawnPositions, enemySpawnPositions)
   local roster = {}
+
+  if PVP then
+    local function addHeroTeam(spawnPositions, teamName)
+      local classPool = shuffledCopy(availableClasses)
+
+      for index, spawn in ipairs(spawnPositions) do
+        local classInfo = classPool[index]
+        local spriteName = classInfo.sprites[math.random(#classInfo.sprites)]
+        local spritePath = "assets/sprites/heroes/" .. spriteName .. ".png"
+        roster[#roster + 1] = Character.new(
+          classInfo.className .. "_" .. teamName .. "_" .. index,
+          spritePath,
+          spawn.column,
+          spawn.row,
+          Character.rollHeroStats(classInfo.className),
+          spawn.direction,
+          classInfo.className,
+          teamName
+        )
+      end
+    end
+
+    addHeroTeam(playerSpawnPositions, "player")
+    addHeroTeam(enemySpawnPositions, "enemy")
+    return roster
+  end
+
   local classPool = shuffledCopy(availableClasses)
   local enemyPool = shuffledCopy(enemyArchetypes)
 
@@ -558,7 +602,7 @@ end
 local function handleDirectionalInput(direction)
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
-  if battleResult or not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+  if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -594,7 +638,7 @@ local function handleConfirmInput()
     resetGame()
     return
   end
-  if not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+  if not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -662,7 +706,7 @@ end
 local function handleCancelInput()
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
-  if battleResult or not active or active.team ~= "player" or (battle and battle:isAnimating()) then
+  if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -775,13 +819,21 @@ function love.update(dt)
     Menu:setPhase(battle:getTurnPhase())
   end
 
-  if not hasLivingTeam("player") then
-    beginBattleResult("game_over")
-    return
-  end
-  if not hasLivingTeam("enemy") then
-    beginBattleResult("victory")
-    return
+  if PVP then
+    local winningTeam = getWinningTeam()
+    if winningTeam then
+      beginBattleResult(winningTeam)
+      return
+    end
+  else
+    if not hasLivingTeam("player") then
+      beginBattleResult("game_over")
+      return
+    end
+    if not hasLivingTeam("enemy") then
+      beginBattleResult("victory")
+      return
+    end
   end
 
   local active = getActiveCharacter()
@@ -795,7 +847,7 @@ function love.update(dt)
     and not battle:hasActionSpent()
   )
   Menu:setCanGrapple(active and battle and battle:getTurnPhase() == "action" and battle:isGrappler(active))
-  if active and battle and active.team == "enemy" and not battle:isAnimating() then
+  if not PVP and active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
       if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
         local targetColumn, targetRow = battle:getBestMoveTileFor(active)
@@ -871,7 +923,7 @@ function love.update(dt)
         end
       end
     end
-  elseif enemyTurnState and (not active or active.team ~= "enemy") then
+  elseif enemyTurnState and (PVP or not active or active.team ~= "enemy") then
     enemyTurnState = nil
   end
 
@@ -954,7 +1006,7 @@ function love.draw()
     hoveredCharacter = attackAnimation.target
   elseif healAnimation then
     hoveredCharacter = healAnimation.target
-  elseif active and active.team == "player" and not (battle and battle:isAnimating()) then
+  elseif active and isHumanControlledCharacter(active) and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
     if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
@@ -1004,7 +1056,7 @@ function love.draw()
     effects:drawWorld(battle, gridToScreen, tileW, tileH, love.timer.getTime())
   end
 
-  if active and active.team == "player" and not (battle and battle:isAnimating()) then
+  if active and isHumanControlledCharacter(active) and not (battle and battle:isAnimating()) then
     local cursorX, cursorY
     if battle and battle:isTankMode() then
       cursorX = nil
@@ -1020,7 +1072,7 @@ function love.draw()
     end
     if battle and battle:isTankMode() then
       for _, character in ipairs(characters) do
-        if character.team == "enemy" and battle:isTankTarget(character.column, character.row) then
+        if battle:isTankTarget(character.column, character.row) then
           local targetCursorX, targetCursorY = gridToScreen(character.column, character.row)
           love.graphics.draw(cursor, targetCursorX, targetCursorY)
         end
@@ -1067,7 +1119,7 @@ function love.draw()
   if provokedIcon then
     for _, entry in ipairs(characterDrawList) do
       local character = entry.character
-        if character.team == "enemy" and character.forcedTarget ~= nil then
+        if character.forcedTarget ~= nil then
           local iconScale = (tileW * 0.16) / provokedIcon:getWidth()
           local iconX = entry.x + (tileW * 0.78)
           local iconY = entry.y - (tileH * 0.22) - entry.jumpOffset
@@ -1103,7 +1155,7 @@ function love.draw()
   end
 
   local isAnimating = battle and battle:isAnimating()
-  if active and active.team == "player" and not isAnimating and (not battle or battle:getMode() == "menu") then
+  if active and isHumanControlledCharacter(active) and not isAnimating and (not battle or battle:getMode() == "menu") then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
@@ -1119,13 +1171,14 @@ function love.draw()
 
   if active then
     local hudText = string.format(
-      "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
+      PVP and "Tour %d: %s  %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
       currentTurn,
-      active.displayClassName or active.className or "Inconnu",
-      active.hp,
-      active.mov,
-      active.def,
-      active.atk,
+      PVP and Character.getTeamDisplayName(active.team) or active.displayClassName or active.className or "Inconnu",
+      PVP and (active.displayClassName or active.className or "Inconnu") or active.hp,
+      PVP and active.hp or active.mov,
+      PVP and active.mov or active.def,
+      PVP and active.def or active.atk,
+      PVP and active.atk or (battle and battle:getTurnPhase() or "move"),
       battle and battle:getTurnPhase() or "move"
     )
     local font = love.graphics.getFont()
@@ -1173,7 +1226,7 @@ function love.draw()
 
     local width = love.graphics.getWidth()
     local height = love.graphics.getHeight()
-    local message = battleResult == "game_over" and "GAME OVER" or "VICTOIRE"
+    local message = battleResult == "game_over" and "GAME OVER" or (battleResult == "victory" and "VICTOIRE" or (battleResult == "player" and "L'EQUIPE BLEUE GAGNE" or "L'EQUIPE ROUGE GAGNE"))
     local textWidth = love.graphics.getFont():getWidth(message)
     local textHeight = love.graphics.getFont():getHeight()
     local textX = (width - textWidth) * 0.5
@@ -1187,7 +1240,13 @@ function love.draw()
     else
       love.graphics.setColor(1, 1, 1, alpha)
       love.graphics.rectangle("fill", 0, 0, width, height)
-      love.graphics.setColor(1, 0.45, 0.05, alpha)
+      if battleResult == "player" then
+        love.graphics.setColor(0.12, 0.48, 1, alpha)
+      elseif battleResult == "enemy" then
+        love.graphics.setColor(0.9, 0.18, 0.18, alpha)
+      else
+        love.graphics.setColor(1, 0.45, 0.05, alpha)
+      end
       love.graphics.print(message, textX, textY)
     end
 
@@ -1234,8 +1293,8 @@ function love.keypressed(key)
   local gameMode = battle and battle:getMode() or "menu"
   if battleResult then
     return
-  elseif active and active.team ~= "player" then
-    -- disable player input during enemy turns
+  elseif active and not isHumanControlledCharacter(active) then
+    -- disable player input during AI turns
   elseif battle and battle:isAnimating() then
     -- disable input during animations
   elseif gameMode == "move" then

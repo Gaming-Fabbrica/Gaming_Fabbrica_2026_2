@@ -1,3 +1,4 @@
+local Rules = require("rules")
 local Character = {}
 Character.__index = Character
 
@@ -12,6 +13,7 @@ Character.frenchClassNames = {
   tactician = "Tacticien",
   tank = "Tank",
   ["affame"] = "Affamé",
+  ["affamé"] = "Affamé",
   embourbe = "Embourbé",
   ["loup1"] = "Loup",
   ["loup2"] = "Loup Noir",
@@ -37,8 +39,26 @@ Character.heroBaseStats = {
   tank = {hp = 7, mov = 3, def = 4, atk = 3},
 }
 
+Character.teamDisplayNames = {
+  player = "Equipe bleue",
+  enemy = "Equipe rouge",
+}
+
+Character.teamColors = {
+  player = {0.12, 0.48, 1.0},
+  enemy = {0.9, 0.18, 0.18},
+}
+
 function Character.getFrenchClassName(className)
   return Character.frenchClassNames[className] or className or "Inconnu"
+end
+
+function Character.getTeamDisplayName(teamName)
+  return Character.teamDisplayNames[teamName] or tostring(teamName or "Equipe")
+end
+
+function Character.getTeamColor(teamName)
+  return Character.teamColors[teamName] or {1, 1, 1}
 end
 
 function Character.rollHeroStats(className)
@@ -109,6 +129,9 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
   local resolvedTeam = team or "player"
+  local resolvedDirection = direction or (resolvedTeam == "enemy" and "left" or "right")
+  local isMobSprite = type(spritePath) == "string" and spritePath:find("assets/sprites/mobs/", 1, true) ~= nil
+  local defaultSpriteFacing = resolvedStats.spriteFacing or (isMobSprite and "left" or "right")
   local provokeSprite = nil
   local attackSprite = nil
   local castSprite = nil
@@ -142,14 +165,18 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     attackRange = resolvedStats.attackRange or Character.attackRangeForClass(resolvedClassName),
     column = column,
     row = row,
-    direction = direction or "right",
+    direction = resolvedDirection,
     team = resolvedTeam,
-    spriteFacing = resolvedStats.spriteFacing or (resolvedTeam == "enemy" and "left" or "right"),
+    spriteFacing = defaultSpriteFacing,
     provokeSprite = provokeSprite,
     attackSprite = attackSprite,
     castSprite = castSprite,
   }
   return setmetatable(instance, Character)
+end
+
+function Character:getPosition()
+  return self.column, self.row
 end
 
 function Character:setPosition(column, row)
@@ -445,15 +472,30 @@ function Character.drawEntry(entry, tileW, tileH, characterScale, rightOffsetX, 
   local shadowCenterY = entry.y + (tileH * 0.5)
 
   local shadowScaleY = math.max(0.35, math.min(1, entry.scaleYFactor or 1))
+  local shadowCenterX = tileCenterX
+  local shadowRadiusX = tileW * 0.2
+  local shadowRadiusY = tileH * 0.08 * shadowScaleY
+  local shadowDrawY = shadowCenterY + 24
   local shadowAlpha = 0.22 * entry.alpha * shadowScaleY
   love.graphics.setColor(0, 0, 0, shadowAlpha)
   love.graphics.ellipse(
     "fill",
-    tileCenterX,
-    shadowCenterY + 24,
-    tileW * 0.2,
-    tileH * 0.08 * shadowScaleY
+    shadowCenterX,
+    shadowDrawY,
+    shadowRadiusX,
+    shadowRadiusY
   )
+
+  if Rules.PVP then
+    local teamColor = Character.getTeamColor(character.team)
+
+    love.graphics.setColor(teamColor[1], teamColor[2], teamColor[3], 0.24 * entry.alpha)
+    love.graphics.ellipse("fill", shadowCenterX, shadowDrawY, shadowRadiusX, shadowRadiusY)
+    love.graphics.setColor(teamColor[1], teamColor[2], teamColor[3], 0.95 * entry.alpha)
+    love.graphics.setLineWidth(3)
+    love.graphics.ellipse("line", shadowCenterX, shadowDrawY, shadowRadiusX, shadowRadiusY)
+    love.graphics.setLineWidth(1)
+  end
 
   love.graphics.setColor(entry.tintR or 1, entry.tintG or 1, entry.tintB or 1, entry.alpha)
   love.graphics.draw(

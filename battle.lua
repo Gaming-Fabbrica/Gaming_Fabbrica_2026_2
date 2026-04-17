@@ -1,6 +1,18 @@
 local Battle = {}
 Battle.__index = Battle
 
+local HERO_CLASSES = {
+  archer = true,
+  atk_mov = true,
+  counter = true,
+  free = true,
+  grab = true,
+  healer = true,
+  lancer = true,
+  tactician = true,
+  tank = true,
+}
+
 function Battle.new(cols, rows, map)
   local instance = {
     cols = cols,
@@ -45,6 +57,10 @@ function Battle.new(cols, rows, map)
     damagePopupDuration = 0.7,
   }
   return setmetatable(instance, Battle)
+end
+
+function Battle:isHeroCharacter(character)
+  return character and HERO_CLASSES[character.className] == true
 end
 
 function Battle:triggerScreenShake(duration, amplitude)
@@ -169,7 +185,7 @@ function Battle:startActionPhase()
 end
 
 function Battle:isActionFirstCapable(character)
-  return character and character.team == "player" and character.className == "atk_mov"
+  return character and character.className == "atk_mov" and self:isHeroCharacter(character)
 end
 
 function Battle:hasActionSpent()
@@ -282,7 +298,7 @@ function Battle:areOpponents(a, b)
 end
 
 function Battle:getOpponentsOf(character)
-  if character and character.team == "enemy" and character.forcedTarget then
+  if character and character.forcedTarget then
     for _, other in ipairs(self.characters) do
       if other == character.forcedTarget then
         return {other}
@@ -661,15 +677,15 @@ function Battle:updateCharacterDirection(character, fromColumn, toColumn)
 end
 
 function Battle:isHealer(character)
-  return character and character.team == "player" and character.className == "healer"
+  return character and character.className == "healer" and self:isHeroCharacter(character)
 end
 
 function Battle:isGrappler(character)
-  return character and character.team == "player" and character.className == "grab"
+  return character and character.className == "grab" and self:isHeroCharacter(character)
 end
 
 function Battle:isTank(character)
-  return character and character.team == "player" and character.className == "tank"
+  return character and character.className == "tank" and self:isHeroCharacter(character)
 end
 
 function Battle:clearTankEffect()
@@ -699,19 +715,19 @@ function Battle:activateTankStance(activeCharacter)
   self:clearTankEffect()
 
   local tilesInRange = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 5)
-  local affectedEnemies = {}
+  local affectedOpponents = {}
 
-  for _, enemy in ipairs(self.characters) do
-    if enemy.team == "enemy" and tilesInRange[enemy.column .. "," .. enemy.row] then
-      enemy.forcedTarget = activeCharacter
-      affectedEnemies[#affectedEnemies + 1] = enemy
+  for _, other in ipairs(self.characters) do
+    if self:areOpponents(activeCharacter, other) and tilesInRange[other.column .. "," .. other.row] then
+      other.forcedTarget = activeCharacter
+      affectedOpponents[#affectedOpponents + 1] = other
     end
   end
 
   activeCharacter.def = activeCharacter.def + 5
   self.tankEffect = {
     tank = activeCharacter,
-    enemies = affectedEnemies,
+    enemies = affectedOpponents,
     defBonusApplied = true,
   }
 
@@ -727,9 +743,9 @@ function Battle:startTankSelection(activeCharacter)
 
   self.tankRange = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 5)
   self.tankTargets = {}
-  for _, enemy in ipairs(self.characters) do
-    if enemy.team == "enemy" and self.tankRange[enemy.column .. "," .. enemy.row] then
-      self.tankTargets[enemy.column .. "," .. enemy.row] = true
+  for _, other in ipairs(self.characters) do
+    if self:areOpponents(activeCharacter, other) and self.tankRange[other.column .. "," .. other.row] then
+      self.tankTargets[other.column .. "," .. other.row] = true
     end
   end
   self.mode = "tank"
@@ -751,9 +767,9 @@ function Battle:confirmTank(activeCharacter)
     nextTargetIndex = 1,
     targets = {},
   }
-  for _, enemy in ipairs(self.characters) do
-    if enemy.team == "enemy" and previewRange[enemy.column .. "," .. enemy.row] then
-      self.tankAnimation.targets[#self.tankAnimation.targets + 1] = enemy
+  for _, other in ipairs(self.characters) do
+    if self:areOpponents(activeCharacter, other) and previewRange[other.column .. "," .. other.row] then
+      self.tankAnimation.targets[#self.tankAnimation.targets + 1] = other
     end
   end
   return true
@@ -771,7 +787,7 @@ function Battle:getAttackableTiles(activeCharacter)
 end
 
 function Battle:isSplashAttacker(character)
-  return character and character.team == "enemy" and character.className == "affame"
+  return character and character.team == "enemy" and (character.className == "affame" or character.className == "affamé")
 end
 
 function Battle:getSplashAreaTiles(centerColumn, centerRow)
@@ -1354,7 +1370,7 @@ function Battle:isBackAttack(attacker, defender)
 end
 
 function Battle:calculateDamage(attacker, defender)
-  local critical = attacker and attacker.team == "player" and love.math.random(6) == 1
+  local critical = attacker and self:isHeroCharacter(attacker) and love.math.random(6) == 1
   local damage = nil
   if self:isBackAttack(attacker, defender) then
     damage = math.max(1, attacker.atk)
@@ -1383,7 +1399,7 @@ function Battle:canCounterAttack(attacker, defender)
     return true
   end
 
-  if defender.team == "enemy" and attacker.team == "player" then
+  if not self:isHeroCharacter(defender) and defender.team == "enemy" and attacker.team == "player" then
     local counterRange = defender.attackRange or 1
     local distance = self:getTileDistance(defender.column, defender.row, attacker.column, attacker.row)
     return distance ~= nil and distance <= counterRange
@@ -1393,7 +1409,7 @@ function Battle:canCounterAttack(attacker, defender)
 end
 
 function Battle:calculateCounterDamage(attacker, defender)
-  if defender and defender.team == "enemy" then
+  if defender and not self:isHeroCharacter(defender) then
     local counterAtk = math.floor((defender.atk or 0) * 0.5)
     local targetDef = attacker and attacker.def or 0
     return math.max(1, counterAtk - targetDef)
@@ -1422,24 +1438,18 @@ function Battle:shouldLeaveAlgae(character)
 end
 
 function Battle:applyLandingTileEffects(character, column, row)
-  if not character or character.team ~= "player" then
-    if character then
-      print(string.format("[thorns] skip landing effects for %s team=%s", character.name, tostring(character.team)))
-    end
+  if not character or not self:isHeroCharacter(character) then
     return false
   end
   local targetColumn = column or character.column
   local targetRow = row or character.row
-  print(string.format("[thorns] landing check %s at %d,%d thorn=%s", character.name, targetColumn, targetRow, tostring(self:hasThornsAt(targetColumn, targetRow))))
   if not self:hasThornsAt(targetColumn, targetRow) then
     return false
   end
 
   character.hp = math.max(0, character.hp - 1)
-  print(string.format("[thorns] %s takes 1 damage, hp=%d", character.name, character.hp))
   self:addDamagePopup(targetColumn, targetRow, 1)
   if character.hp <= 0 then
-    print(string.format("[thorns] %s defeated by thorns at %d,%d", character.name, targetColumn, targetRow))
     self.mode = "death_animating"
     self.deathAnimation = {
       character = character,
@@ -1537,7 +1547,6 @@ function Battle:update(dt)
 
       if animation.step >= #animation.path then
         local finalNode = animation.path[#animation.path]
-        print(string.format("[move] final landing for %s at %d,%d", animation.character.name, finalNode.column, finalNode.row))
         animation.character:setPosition(finalNode.column, finalNode.row)
         if self:shouldLeaveThorns(animation.character) then
           self:addThorns(finalNode.column, finalNode.row)
@@ -1556,9 +1565,6 @@ function Battle:update(dt)
 
       local fromNode = animation.path[animation.step]
       local toNode = animation.path[animation.step + 1]
-      if fromNode and toNode then
-        print(string.format("[move] %s traverses %d,%d -> %d,%d", animation.character.name, fromNode.column, fromNode.row, toNode.column, toNode.row))
-      end
       if self:shouldLeaveThorns(animation.character) and fromNode then
         self:addThorns(fromNode.column, fromNode.row)
       end
@@ -1643,7 +1649,7 @@ function Battle:update(dt)
           local damage = self:calculateDamage(animation.attacker, target)
           target.hp = target.hp - damage
           self:addDamagePopup(target.column, target.row, damage)
-          if target.team == "player" then
+          if self:isHeroCharacter(target) then
             hitPlayer = true
           end
           if target.hp <= 0 then
@@ -1656,7 +1662,7 @@ function Battle:update(dt)
         end
       else
         animation.target.hp = animation.target.hp - animation.damage
-        if animation.target.team == "player" then
+        if self:isHeroCharacter(animation.target) then
           self:triggerScreenShake(0.24, 14)
         end
         if animation.critical then
@@ -1679,7 +1685,7 @@ function Battle:update(dt)
     then
       animation.counterApplied = true
       animation.attacker.hp = animation.attacker.hp - animation.counterDamage
-      if animation.attacker.team == "player" then
+      if self:isHeroCharacter(animation.attacker) then
         self:triggerScreenShake(0.24, 14)
       end
       if animation.attacker.hp <= 0 then
