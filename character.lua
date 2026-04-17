@@ -188,6 +188,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local provokeSprite = nil
   local attackSprite = nil
   local castSprite = nil
+  local faceSprite = nil
   if resolvedTeam == "player" and resolvedClassName == "tank" then
     local provokePath = spritePath:gsub("%.png$", "_provoke.png")
     provokeSprite = love.graphics.newImage(provokePath)
@@ -197,6 +198,10 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     if love.filesystem.getInfo(attackPath) then
       attackSprite = love.graphics.newImage(attackPath)
     end
+  end
+  local facePath = spritePath:gsub("%.png$", "_face.png")
+  if love.filesystem.getInfo(facePath) then
+    faceSprite = love.graphics.newImage(facePath)
   end
   if resolvedTeam == "player" and resolvedClassName == "healer" then
     local castPath = spritePath:gsub("%.png$", "_cast.png")
@@ -225,6 +230,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     provokeSprite = provokeSprite,
     attackSprite = attackSprite,
     castSprite = castSprite,
+    faceSprite = faceSprite,
   }
   return setmetatable(instance, Character)
 end

@@ -220,6 +220,45 @@ local function logViewport(label)
   ))
 end
 
+local function drawHudAvatar(character, x, y, diameter)
+  local sprite = character and (character.faceSprite or character.sprite) or nil
+  if not sprite then
+    return
+  end
+
+  local spriteWidth = sprite:getWidth()
+  local spriteHeight = sprite:getHeight()
+  local radius = diameter * 0.5
+  local centerX = x + radius
+  local centerY = y + radius
+
+  love.graphics.stencil(function()
+    love.graphics.circle("fill", centerX, centerY, radius)
+  end, "replace", 1)
+  love.graphics.setStencilTest("greater", 0)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  if character.faceSprite then
+    local drawScale = math.max(diameter / spriteWidth, diameter / spriteHeight)
+    local drawWidth = spriteWidth * drawScale
+    local drawHeight = spriteHeight * drawScale
+    love.graphics.draw(sprite, x + (diameter - drawWidth) * 0.5, y + (diameter - drawHeight) * 0.5, 0, drawScale, drawScale)
+  else
+    local headCenterX = spriteWidth * 0.5
+    local headCenterY = spriteHeight * 0.25
+    local cropSize = math.min(spriteWidth * 0.72, spriteHeight * 0.52)
+    local cropX = math.max(0, math.min(spriteWidth - cropSize, headCenterX - (cropSize * 0.5)))
+    local cropY = math.max(0, math.min(spriteHeight - cropSize, headCenterY - (cropSize * 0.5)))
+    local quad = love.graphics.newQuad(cropX, cropY, cropSize, cropSize, spriteWidth, spriteHeight)
+    love.graphics.draw(sprite, quad, x, y, 0, diameter / cropSize, diameter / cropSize)
+  end
+
+  love.graphics.setStencilTest()
+  love.graphics.setColor(0, 0, 0, 0.18)
+  love.graphics.circle("line", centerX, centerY, radius)
+  love.graphics.setColor(1, 1, 1, 1)
+end
+
 local map = {}
 local obstacles = {}
 local characters = {}
@@ -1385,33 +1424,35 @@ function love.draw()
   if active then
     local activeName = Character.getDisplayName(active)
     local activeClassName = active.displayClassName or active.className or "Inconnu"
-    local hudText = string.format(
-      Rules.PVP and "Tour %d: %s  %s (%s)  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s (%s)  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
-      currentTurn,
-      Rules.PVP and Character.getTeamDisplayName(active.team) or activeName,
-      Rules.PVP and activeName or activeClassName,
-      Rules.PVP and activeClassName or active.hp,
-      Rules.PVP and active.hp or active.mov,
-      Rules.PVP and active.mov or active.def,
-      Rules.PVP and active.def or active.atk,
-      Rules.PVP and active.atk or (battle and battle:getTurnPhase() or "move"),
-      battle and battle:getTurnPhase() or "move"
-    )
+    local line1 = Rules.PVP and string.format("%s  %s (%s)", Character.getTeamDisplayName(active.team), activeName, activeClassName) or string.format("%s (%s)", activeName, activeClassName)
+    local line2 = string.format("HP:%d  MOV:%d  DEF:%d  ATK:%d", active.hp, active.mov, active.def, active.atk)
     local font = love.graphics.getFont()
+    local lineHeight = font:getHeight()
+    local lineGap = math.floor((2 * uiScale) + 0.5)
     local paddingX = math.floor((18 * uiScale) + 0.5)
-    local paddingY = math.floor((12 * uiScale) + 0.5)
+    local paddingY = math.floor((10 * uiScale) + 0.5)
     local boxX = math.floor((10 * uiScale) + 0.5)
     local boxY = math.floor((10 * uiScale) + 0.5)
-    local boxWidth = font:getWidth(hudText) + (paddingX * 2)
-    local boxHeight = font:getHeight() + (paddingY * 2)
+    local textBlockHeight = (lineHeight * 2) + lineGap
+    local boxHeight = textBlockHeight + (paddingY * 2)
+    local avatarInset = math.floor((5 * uiScale) + 0.5)
+    local avatarSize = boxHeight - (avatarInset * 2)
+    local avatarSpacing = math.floor((14 * uiScale) + 0.5)
+    local textWidth = math.max(font:getWidth(line1), font:getWidth(line2))
+    local extraRightPadding = math.floor((10 * uiScale) + 0.5)
+    local boxWidth = textWidth + (paddingX * 2) + avatarSize + avatarSpacing + extraRightPadding
     local radius = math.floor(boxHeight * 0.5)
+    local textX = boxX + paddingX + avatarSize + avatarSpacing
+    local textY = boxY + paddingY
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
     love.graphics.setColor(0, 0, 0, 0.18)
     love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
+    drawHudAvatar(active, boxX + avatarInset, boxY + avatarInset, avatarSize)
     love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.print(hudText, boxX + paddingX, boxY + paddingY)
+    love.graphics.print(line1, textX, textY)
+    love.graphics.print(line2, textX, textY + lineHeight + lineGap)
   else
     local font = love.graphics.getFont()
     local text = "No active character"
