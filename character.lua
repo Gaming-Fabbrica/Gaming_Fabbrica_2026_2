@@ -3,16 +3,16 @@ local Character = {}
 Character.__index = Character
 
 Character.frenchClassNames = {
-  archer = "Archer",
--- javelineer = "Javelineer",
-  atk_mov = "Maraudeur",
-  counter = "Lancier",
-  free = "Rôdeur",
-  grab = "Harponneur",
-  healer = "Soigneur",
-  lancer = "Piquier",
-  tactician = "Tacticien",
-  tank = "Gardien",
+  archer = {boy = "Archer", girl = "Archère"},
+-- javelineer = {boy = "Javelinier", girl = "Javelinière"},
+  atk_mov = {boy = "Maraudeur", girl = "Maraudeuse"},
+  counter = {boy = "Lancier", girl = "Lancière"},
+  free = {boy = "Rôdeur", girl = "Rôdeuse"},
+  grab = {boy = "Harponneur", girl = "Harponneuse"},
+  healer = {boy = "Soigneur", girl = "Soigneuse"},
+  lancer = {boy = "Piquier", girl = "Piquière"},
+  tactician = {boy = "Tacticien", girl = "Tacticienne"},
+  tank = {boy = "Gardien", girl = "Gardienne"},
   ["affame"] = "Affamé",
   ["affamé"] = "Affamé",
   embourbe = "Embourbé",
@@ -63,8 +63,15 @@ Character.heroFirstNames = {
   tank = {boy = "Ingretu", girl = "Ingreta"},
 }
 
-function Character.getFrenchClassName(className)
-  return Character.frenchClassNames[className] or className or "Inconnu"
+function Character.getFrenchClassName(className, gender)
+  local frenchName = Character.frenchClassNames[className]
+  if type(frenchName) == "table" then
+    if gender and frenchName[gender] then
+      return frenchName[gender]
+    end
+    return frenchName.boy or frenchName.girl or className or "Inconnu"
+  end
+  return frenchName or className or "Inconnu"
 end
 
 function Character.getTeamDisplayName(teamName)
@@ -174,6 +181,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local resolvedClassName = className or Character.inferClassName(name)
   local resolvedHp = resolvedStats.hp or 5
   local resolvedTeam = team or "player"
+  local resolvedGender = Character.inferGender(spritePath)
   local resolvedDirection = direction or (resolvedTeam == "enemy" and "left" or "right")
   local isMobSprite = type(spritePath) == "string" and spritePath:find("assets/sprites/mobs/", 1, true) ~= nil
   local defaultSpriteFacing = resolvedStats.spriteFacing or (isMobSprite and "left" or "right")
@@ -199,7 +207,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
   local instance = {
     name = name,
     className = resolvedClassName,
-    displayClassName = Character.getFrenchClassName(resolvedClassName),
+    displayClassName = Character.getFrenchClassName(resolvedClassName, resolvedGender),
     spritePath = spritePath,
     sprite = love.graphics.newImage(spritePath),
     hp = resolvedHp,
@@ -212,6 +220,7 @@ function Character.new(name, spritePath, column, row, stats, direction, classNam
     row = row,
     direction = resolvedDirection,
     team = resolvedTeam,
+    gender = resolvedGender,
     spriteFacing = defaultSpriteFacing,
     provokeSprite = provokeSprite,
     attackSprite = attackSprite,
