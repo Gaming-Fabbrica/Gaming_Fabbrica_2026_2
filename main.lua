@@ -321,6 +321,7 @@ local stoneCount = 16
 
 local availableClasses = {
   {className = "archer", sprites = {"archer_boy", "archer_girl"}},
+  {className = "javelineer", sprites = {"javelineer_boy", "javelineer_girl"}},
   {className = "atk_mov", sprites = {"atk_mov_boy", "atk_mov_girl"}},
   {className = "counter", sprites = {"counter_boy", "counter_girl"}},
   {className = "free", sprites = {"free_boy", "free_girl"}},

@@ -4,7 +4,7 @@ Character.__index = Character
 
 Character.frenchClassNames = {
   archer = {boy = "Archer", girl = "Archère"},
--- javelineer = {boy = "Javelinier", girl = "Javelinière"},
+  javelineer = {boy = "Javelinier", girl = "Javelinière"},
   atk_mov = {boy = "Maraudeur", girl = "Maraudeuse"},
   counter = {boy = "Lancier", girl = "Lancière"},
   free = {boy = "Rôdeur", girl = "Rôdeuse"},
@@ -30,6 +30,7 @@ Character.frenchClassNames = {
 
 Character.heroBaseStats = {
   archer = {hp = 4, mov = 5, def = 1, atk = 3},
+  javelineer = {hp = 4, mov = 5, def = 1, atk = 3},
   atk_mov = {hp = 4, mov = 5, def = 2, atk = 4},
   counter = {hp = 5, mov = 4, def = 3, atk = 3},
   free = {hp = 5, mov = 4, def = 2, atk = 3},
@@ -140,7 +141,7 @@ function Character.inferClassName(name)
 end
 
 function Character.attackRangeForClass(className)
-  if className == "archer" then
+  if className == "archer" or className == "javelineer" then
     return 4
   elseif className == "lancer" then
     return 2

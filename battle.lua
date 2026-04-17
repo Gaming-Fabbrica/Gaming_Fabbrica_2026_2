@@ -3,6 +3,7 @@ Battle.__index = Battle
 
 local HERO_CLASSES = {
   archer = true,
+  javelineer = true,
   atk_mov = true,
   counter = true,
   free = true,
@@ -1634,7 +1635,9 @@ end
 function Battle:calculateDamage(attacker, defender)
   local critical = attacker and self:isHeroCharacter(attacker) and love.math.random(6) == 1
   local damage = nil
-  if self:isBackAttack(attacker, defender) then
+  if attacker and attacker.className == "javelineer" then
+    damage = 2
+  elseif self:isBackAttack(attacker, defender) then
     damage = math.max(1, attacker.atk)
   else
     damage = math.max(1, attacker.atk - defender.def)
