@@ -1632,6 +1632,47 @@ function Battle:isBackAttack(attacker, defender)
   return false
 end
 
+function Battle:getCriticalPushDestination(attacker, defender)
+  if not attacker or not defender then
+    return nil, nil
+  end
+
+  local attackerX, attackerY = self:getGridVector(attacker.column, attacker.row)
+  local defenderX, defenderY = self:getGridVector(defender.column, defender.row)
+  local pushX = defenderX - attackerX
+  local pushY = defenderY - attackerY
+  local bestColumn = nil
+  local bestRow = nil
+  local bestScore = nil
+
+  for _, neighbor in ipairs(self:getHexNeighbors(defender.column, defender.row)) do
+    local column = neighbor[1]
+    local row = neighbor[2]
+    if self:isWalkableStep(column, row, defender) then
+      local neighborX, neighborY = self:getGridVector(column, row)
+      local score = ((neighborX - defenderX) * pushX) + ((neighborY - defenderY) * pushY)
+      if score > 0 and (bestScore == nil or score > bestScore) then
+        bestScore = score
+        bestColumn = column
+        bestRow = row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:applyCriticalPush(attacker, defender)
+  local column, row = self:getCriticalPushDestination(attacker, defender)
+  if not column or not row then
+    return false
+  end
+
+  self:updateCharacterDirection(defender, defender.column, column)
+  defender:setPosition(column, row)
+  return true
+end
+
 function Battle:calculateDamage(attacker, defender)
   local critical = attacker and self:isHeroCharacter(attacker) and love.math.random(6) == 1
   local damage = nil
@@ -1944,8 +1985,13 @@ function Battle:update(dt)
         if animation.target.hp <= 0 then
           animation.target.hp = 0
           animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.target
-        elseif not animation.counterApplied and self:canCounterAttack(animation.attacker, animation.target) then
-          animation.counterDamage = self:calculateCounterDamage(animation.attacker, animation.target)
+        else
+          if animation.critical then
+            self:applyCriticalPush(animation.attacker, animation.target)
+          end
+          if not animation.counterApplied and self:canCounterAttack(animation.attacker, animation.target) then
+            animation.counterDamage = self:calculateCounterDamage(animation.attacker, animation.target)
+          end
         end
       end
     end
