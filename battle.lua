@@ -105,6 +105,10 @@ function Battle:setCharacters(characters)
   self.characters = characters or {}
 end
 
+function Battle:logGrapple(message)
+  print(string.format("[grapple] %s", message))
+end
+
 function Battle:getMode()
   return self.mode
 end
@@ -748,7 +752,10 @@ function Battle:isHealer(character)
 end
 
 function Battle:isGrappler(character)
-  return character and character.className == "grab" and self:isHeroCharacter(character)
+  return character and (
+    (character.className == "grab" and self:isHeroCharacter(character))
+    or (character.team == "enemy" and character.className == "serpentsoleil")
+  )
 end
 
 function Battle:isTank(character)
@@ -1045,8 +1052,11 @@ function Battle:getGrappleTargets(activeCharacter)
   local targets = {}
 
   for _, character in ipairs(self.characters) do
-    if character ~= activeCharacter and range[character.column .. "," .. character.row] then
-      targets[character.column .. "," .. character.row] = true
+    if character ~= activeCharacter and self:areOpponents(activeCharacter, character) and range[character.column .. "," .. character.row] then
+      local destinationColumn, destinationRow = self:getBestGrappleDestination(activeCharacter, character)
+      if destinationColumn and destinationRow and (destinationColumn ~= character.column or destinationRow ~= character.row) then
+        targets[character.column .. "," .. character.row] = true
+      end
     end
   end
 
@@ -1242,6 +1252,7 @@ end
 
 function Battle:startGrappleSelection(activeCharacter)
   if self.turnPhase ~= "action" or not self:isGrappler(activeCharacter) then
+    self:logGrapple(string.format("selection refused for %s at phase=%s", tostring(activeCharacter and activeCharacter.className), tostring(self.turnPhase)))
     return false
   end
 
@@ -1261,9 +1272,18 @@ function Battle:startGrappleSelection(activeCharacter)
 
   if nearestDistance then
     self.mode = "grapple"
+    self:logGrapple(string.format(
+      "%s at %d,%d selected target at %d,%d",
+      tostring(activeCharacter.className),
+      activeCharacter.column,
+      activeCharacter.row,
+      self.grappleTarget.column,
+      self.grappleTarget.row
+    ))
     return true
   end
 
+  self:logGrapple(string.format("%s at %d,%d found no grapple target in range", tostring(activeCharacter.className), activeCharacter.column, activeCharacter.row))
   self.grappleRange = {}
   self.grappleTargets = {}
   self.orderTargets = {}
@@ -1444,7 +1464,7 @@ function Battle:getBestGrappleDestination(activeCharacter, target)
   for _, neighbor in ipairs(self:getHexNeighbors(activeCharacter.column, activeCharacter.row)) do
     local column = neighbor[1]
     local row = neighbor[2]
-    if self:isWalkableStep(column, row, target) then
+    if (column ~= target.column or row ~= target.row) and self:isWalkableStep(column, row, target) then
       local distance = self:getTileDistance(column, row, target.column, target.row)
       if distance and (bestDistance == nil or distance < bestDistance) then
         bestDistance = distance
@@ -1459,16 +1479,34 @@ end
 
 function Battle:confirmGrapple(activeCharacter)
   if not self:isGrappleable(self.grappleTarget.column, self.grappleTarget.row) then
+    self:logGrapple(string.format(
+      "%s at %d,%d tried invalid target tile %d,%d",
+      tostring(activeCharacter and activeCharacter.className),
+      activeCharacter and activeCharacter.column or -1,
+      activeCharacter and activeCharacter.row or -1,
+      self.grappleTarget.column,
+      self.grappleTarget.row
+    ))
     return false
   end
 
   local target = self:getCharacterAt(self.grappleTarget.column, self.grappleTarget.row, activeCharacter)
   if not target or target == activeCharacter then
+    self:logGrapple(string.format("%s found no valid target on %d,%d", tostring(activeCharacter and activeCharacter.className), self.grappleTarget.column, self.grappleTarget.row))
     return false
   end
 
   local destinationColumn, destinationRow = self:getBestGrappleDestination(activeCharacter, target)
   if not destinationColumn or not destinationRow then
+    self:logGrapple(string.format(
+      "%s at %d,%d could not pull %s at %d,%d because no adjacent tile is free",
+      tostring(activeCharacter.className),
+      activeCharacter.column,
+      activeCharacter.row,
+      tostring(target.className),
+      target.column,
+      target.row
+    ))
     return false
   end
 
@@ -1478,12 +1516,15 @@ function Battle:confirmGrapple(activeCharacter)
   self.orderSelectedCharacter = nil
   self.orderMoveRange = {}
 
-  if destinationColumn == target.column and destinationRow == target.row then
-    self.mode = "menu"
-    self.completedActionCharacter = activeCharacter
-    return true
-  end
-
+  self:logGrapple(string.format(
+    "%s pulls %s from %d,%d to %d,%d",
+    tostring(activeCharacter.className),
+    tostring(target.className),
+    target.column,
+    target.row,
+    destinationColumn,
+    destinationRow
+  ))
   self.mode = "grapple_animating"
   self.grappleAnimation = {
     actor = activeCharacter,
@@ -1719,6 +1760,10 @@ function Battle:isColdAttacker(character)
   return character and character.team == "enemy" and character.className == "loup3"
 end
 
+function Battle:isPoisonAttacker(character)
+  return character and character.team == "enemy" and character.className == "serpent acrobate"
+end
+
 function Battle:calculateDamage(attacker, defender)
   local critical = attacker and self:isHeroCharacter(attacker) and love.math.random(6) == 1
   local damage = nil
@@ -1942,7 +1987,7 @@ function Battle:confirmAttack(activeCharacter)
   local damage, critical = self:calculateDamage(activeCharacter, target)
   self.mode = "attack_animating"
   self.attackAnimation = {
-    kind = self:isColdAttacker(activeCharacter) and "cold" or nil,
+    kind = self:isColdAttacker(activeCharacter) and "cold" or (self:isPoisonAttacker(activeCharacter) and "poison" or nil),
     attacker = activeCharacter,
     target = target,
     startHp = target.hp,

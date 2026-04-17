@@ -339,7 +339,7 @@ local enemyArchetypes = {
   {name = "loup2", file = "loup2.png", stats = {hp = 7, mov = 5, def = 1, atk = 4}},
   {name = "loup3", file = "loup3.png", stats = {hp = 8, mov = 4, def = 1, atk = 4}},
   {name = "noye", file = "noye.png", stats = {hp = 8, mov = 3, def = 3, atk = 3}},
-  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 5, mov = 6, def = 1, atk = 4}},
+  {name = "serpent acrobate", file = "serpent acrobate.png", stats = {hp = 5, mov = 6, def = 1, atk = 4, attackRange = 3}},
   {name = "serpentroche", file = "serpentroche.png", stats = {hp = 8, mov = 3, def = 3, atk = 3}},
   {name = "serpentsoleil", file = "serpentsoleil.png", stats = {hp = 5, mov = 4, def = 1, atk = 6}},
   {name = "trauma", file = "trauma.png", stats = {hp = 7, mov = 3, def = 2, atk = 5}},
@@ -1204,6 +1204,15 @@ function love.update(dt)
         if enemyTurnState.timer <= 0 then
           advanceTurn(active)
         end
+      elseif enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "grapple_preview" then
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          local didGrapple = battle:confirmGrapple(active)
+          if not didGrapple then
+            print(string.format("[enemy ai] grapple failed for %s at %d,%d", tostring(active.className), active.column, active.row))
+          end
+          enemyTurnState = nil
+        end
       elseif enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "attack_preview" then
         enemyTurnState.timer = enemyTurnState.timer - dt
         if enemyTurnState.timer <= 0 then
@@ -1233,8 +1242,14 @@ function love.update(dt)
             }
           end
         end
-      elseif not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "attack_preview" then
-        if battle:startAttackSelection(active) then
+      elseif not enemyTurnState or enemyTurnState.character ~= active or (enemyTurnState.phase ~= "attack_preview" and enemyTurnState.phase ~= "grapple_preview") then
+        if battle:isGrappler(active) and battle:startGrappleSelection(active) then
+          enemyTurnState = {
+            character = active,
+            phase = "grapple_preview",
+            timer = enemyAttackPreviewDelay,
+          }
+        elseif battle:startAttackSelection(active) then
           enemyTurnState = {
             character = active,
             phase = "attack_preview",

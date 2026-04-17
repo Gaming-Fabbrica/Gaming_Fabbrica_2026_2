@@ -13,6 +13,7 @@ function Effects.new()
     algaeTile = nil,
     splashTile = nil,
     coldTile = nil,
+    poisonTile = nil,
     healHeartTile = nil,
     terrainEffectScale = 0.9,
     terrainEffectAppearDuration = 0.25,
@@ -26,6 +27,7 @@ function Effects:load()
   self.algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
   self.splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
   self.coldTile = love.graphics.newImage("assets/sprites/effects/cold.png")
+  self.poisonTile = love.graphics.newImage("assets/sprites/effects/poison.png")
   self.healHeartTile = love.graphics.newImage("assets/sprites/items/heart.png")
 end
 
@@ -229,6 +231,40 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
       self.coldTile:getWidth() * 0.5,
       self.coldTile:getHeight() * 0.5
     )
+    love.graphics.setColor(1, 1, 1, 1)
+  elseif attackAnimation and attackAnimation.kind == "poison" and self.poisonTile then
+    local poisonX, poisonY = gridToScreen(attackAnimation.target.column, attackAnimation.target.row)
+    local poisonDuration = battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration
+    local poisonRatio = math.min(1, attackAnimation.timer / poisonDuration)
+    local centerX = poisonX + (tileW * 0.5)
+    local centerY = poisonY + (tileH * 0.5)
+    for index = 1, 12 do
+      local delay = (index - 1) * 0.025
+      local localTimer = math.max(0, attackAnimation.timer - delay)
+      local dropRatio = math.min(1, localTimer / math.max(0.12, poisonDuration - delay))
+      if localTimer > 0 and dropRatio < 1.0 then
+        local columnOffset = (((index - 1) % 4) - 1.5) * tileW * 0.18
+        local rowOffset = (math.floor((index - 1) / 4) - 1) * tileH * 0.08
+        local wobble = math.sin((index * 0.9) + (dropRatio * 8.0)) * tileW * 0.05
+        local startY = centerY - tileH * (1.4 + (0.12 * (index % 3)))
+        local endY = centerY - tileH * 0.08 + rowOffset
+        local drawX = centerX + columnOffset + wobble
+        local drawY = startY + ((endY - startY) * dropRatio)
+        local scale = (tileW / self.poisonTile:getWidth()) * (0.12 + (0.06 * (index % 3)))
+        local alpha = math.min(1, 0.25 + (0.85 * poisonRatio)) * (1 - (dropRatio * 0.2))
+        love.graphics.setColor(0.78, 1, 0.42, alpha)
+        love.graphics.draw(
+          self.poisonTile,
+          drawX,
+          drawY,
+          0,
+          scale,
+          scale,
+          self.poisonTile:getWidth() * 0.5,
+          self.poisonTile:getHeight() * 0.5
+        )
+      end
+    end
     love.graphics.setColor(1, 1, 1, 1)
   end
 
