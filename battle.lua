@@ -758,6 +758,16 @@ function Battle:isGrappler(character)
   )
 end
 
+function Battle:canGrappleCharacter(activeCharacter, targetCharacter)
+  if not activeCharacter or not targetCharacter or activeCharacter == targetCharacter then
+    return false
+  end
+  if activeCharacter.team == "enemy" and activeCharacter.className == "serpentsoleil" then
+    return self:areOpponents(activeCharacter, targetCharacter)
+  end
+  return true
+end
+
 function Battle:isTank(character)
   return character and character.className == "tank" and self:isHeroCharacter(character)
 end
@@ -1052,7 +1062,7 @@ function Battle:getGrappleTargets(activeCharacter)
   local targets = {}
 
   for _, character in ipairs(self.characters) do
-    if character ~= activeCharacter and self:areOpponents(activeCharacter, character) and range[character.column .. "," .. character.row] then
+    if self:canGrappleCharacter(activeCharacter, character) and range[character.column .. "," .. character.row] then
       local destinationColumn, destinationRow = self:getBestGrappleDestination(activeCharacter, character)
       if destinationColumn and destinationRow and (destinationColumn ~= character.column or destinationRow ~= character.row) then
         targets[character.column .. "," .. character.row] = true
