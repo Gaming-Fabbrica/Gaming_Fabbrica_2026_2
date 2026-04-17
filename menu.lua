@@ -9,6 +9,7 @@ Menu.canHeal = false
 Menu.canGrapple = false
 Menu.canActionFirst = false
 Menu.canTank = false
+Menu.canOrder = false
 Menu.disabledEntriesByPhase = {
   action = {
     ["Botte secrète"] = true,
@@ -50,6 +51,9 @@ function Menu:getEntries()
   if self.phase == "action" and self.canGrapple then
     return { "Se battre", "Grapin", "Botte secrète", "Utiliser un objet", "Passer son tour" }
   end
+  if self.phase == "action" and self.canOrder then
+    return { "Se battre", "Ordonner", "Utiliser un objet", "Passer son tour" }
+  end
   return self.entriesByPhase[self.phase] or {}
 end
 
@@ -67,6 +71,10 @@ end
 
 function Menu:setCanTank(canTank)
   self.canTank = canTank == true
+end
+
+function Menu:setCanOrder(canOrder)
+  self.canOrder = canOrder == true
 end
 
 function Menu:setPhase(phase)

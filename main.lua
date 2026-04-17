@@ -744,6 +744,12 @@ local function handleDirectionalInput(direction)
   elseif gameMode == "grapple" then
     battle:moveGrappleTargetByKey(active, direction)
     pulseRumble(0.08, 0.04, 0.05)
+  elseif gameMode == "order_target" then
+    battle:moveOrderTargetByKey(direction)
+    pulseRumble(0.08, 0.04, 0.05)
+  elseif gameMode == "order_move" then
+    battle:moveOrderMoveTargetByKey(direction)
+    pulseRumble(0.08, 0.04, 0.05)
   elseif gameMode == "attack" then
     battle:moveAttackTargetByKey(active, direction)
     pulseRumble(0.08, 0.04, 0.05)
@@ -797,6 +803,10 @@ local function handleConfirmInput()
     if battle and battle:confirmGrapple(active) then
       Menu:reset()
     end
+  elseif gameMode == "order_target" or gameMode == "order_move" then
+    if battle and battle:confirmOrder(active) then
+      Menu:reset()
+    end
   elseif gameMode == "attack" then
     if battle then
       battle:confirmAttack(active)
@@ -834,6 +844,10 @@ local function handleConfirmInput()
         if battle:startGrappleSelection(active) then
           Menu:reset()
         end
+      elseif selectedAction == "Ordonner" then
+        if battle:startOrderSelection(active) then
+          Menu:reset()
+        end
       elseif selectedAction == "Passer son tour" then
         battle:completeAction(active)
       end
@@ -868,6 +882,9 @@ local function handleCancelInput()
   elseif gameMode == "grapple" then
     battle:cancelGrappleMode()
     Menu:reset()
+  elseif gameMode == "order_target" or gameMode == "order_move" then
+    battle:cancelOrderMode()
+    Menu:reset()
   elseif gameMode == "attack" then
     battle:cancelAttackMode()
     Menu:reset()
@@ -896,7 +913,8 @@ end
 function love.load()
   isWeb = love.system.getOS() == "Web"
   allowGamepadRumble = not isWeb
-  resetGame()
+  ensureWindowInitialized()
+  openTitleScreen()
   logViewport("load")
 end
 
@@ -997,6 +1015,7 @@ function love.update(dt)
     and not battle:hasActionSpent()
   )
   Menu:setCanGrapple(active and battle and battle:getTurnPhase() == "action" and battle:isGrappler(active))
+  Menu:setCanOrder(active and battle and battle:getTurnPhase() == "action" and battle:isTactician(active))
   if not Rules.PVP and active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
       if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
@@ -1081,7 +1100,7 @@ function love.update(dt)
     local gameMode = battle and battle:getMode() or "menu"
     local focusColumn = active.column
     local focusRow = active.row
-    if gameMode == "move" or gameMode == "attack" or gameMode == "heal" or gameMode == "grapple" then
+    if gameMode == "move" or gameMode == "attack" or gameMode == "heal" or gameMode == "grapple" or gameMode == "order_target" or gameMode == "order_move" then
       focusColumn, focusRow = battle:getCursorColumnRow(active)
     end
 
@@ -1171,7 +1190,7 @@ function love.draw()
   elseif active and isHumanControlledCharacter(active) and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
-    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode() or battle:isOrderTargetMode() or battle:isOrderMoveMode()) then
       hoverColumn, hoverRow = battle:getCursorColumnRow(active)
     end
     hoveredCharacter = Character.getAtTile(characters, hoverColumn, hoverRow)
@@ -1210,6 +1229,16 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, glow)
         love.graphics.draw(attackTile, x, y)
         love.graphics.setColor(1, 1, 1, 1)
+      elseif active and battle and battle:isOrderTargetMode() and battle:isOrderable(c, r) then
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(attackTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
+      elseif active and battle and battle:isOrderMoveMode() and battle:isOrderMoveReachable(c, r) then
+        local glow = 0.58 + 0.12 * math.cos(love.timer.getTime() * 4)
+        love.graphics.setColor(1, 1, 1, glow)
+        love.graphics.draw(moveTile, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
       end
     end
   end
@@ -1223,7 +1252,7 @@ function love.draw()
     if battle and battle:isTankMode() then
       cursorX = nil
       cursorY = nil
-    elseif battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode()) then
+    elseif battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode() or battle:isOrderTargetMode() or battle:isOrderMoveMode()) then
       local targetColumn, targetRow = battle:getCursorColumnRow(active)
       cursorX, cursorY = gridToScreen(targetColumn, targetRow)
     else
@@ -1487,6 +1516,18 @@ function love.keypressed(key)
     if key == "left" or key == "right" or key == "up" or key == "down" then
       if battle and active then
         battle:moveGrappleTargetByKey(active, key)
+      end
+    end
+  elseif gameMode == "order_target" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      if battle then
+        battle:moveOrderTargetByKey(key)
+      end
+    end
+  elseif gameMode == "order_move" then
+    if key == "left" or key == "right" or key == "up" or key == "down" then
+      if battle then
+        battle:moveOrderMoveTargetByKey(key)
       end
     end
   elseif gameMode == "attack" then

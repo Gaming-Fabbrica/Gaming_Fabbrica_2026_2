@@ -33,6 +33,11 @@ function Battle.new(cols, rows, map)
     grappleRange = {},
     grappleTargets = {},
     grappleTarget = { column = 1, row = 1 },
+    orderTargets = {},
+    orderTarget = { column = 1, row = 1 },
+    orderSelectedCharacter = nil,
+    orderMoveRange = {},
+    orderMoveTarget = { column = 1, row = 1 },
     movingCharacter = nil,
     moveAnimation = nil,
     attackAnimation = nil,
@@ -120,6 +125,9 @@ function Battle:startTurn(activeCharacter)
   self.tankTargets = {}
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
   self.moveAnimation = nil
   if self.effects then
     self.effects:clearHealAnimation()
@@ -181,6 +189,9 @@ function Battle:startActionPhase()
   self.tankTargets = {}
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
   self.movingCharacter = nil
 end
 
@@ -204,6 +215,9 @@ function Battle:beginActionFirstTurn(character)
   self.healTargets = {}
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
   self.movingCharacter = nil
   return true
 end
@@ -256,6 +270,15 @@ function Battle:setMode(mode)
   if mode ~= "grapple" then
     self.grappleRange = {}
     self.grappleTargets = {}
+  end
+  if mode ~= "order_target" then
+    self.orderTargets = {}
+    if mode ~= "order_move" then
+      self.orderSelectedCharacter = nil
+    end
+  end
+  if mode ~= "order_move" then
+    self.orderMoveRange = {}
   end
   if mode ~= "heal_animating" and self.effects then
     self.effects:clearHealAnimation()
@@ -343,6 +366,14 @@ function Battle:isGrappleMode()
   return self.mode == "grapple"
 end
 
+function Battle:isOrderTargetMode()
+  return self.mode == "order_target"
+end
+
+function Battle:isOrderMoveMode()
+  return self.mode == "order_move"
+end
+
 function Battle:getAttackAnimation()
   return self.attackAnimation
 end
@@ -408,6 +439,14 @@ function Battle:isGrappleable(column, row)
   return self.grappleTargets[column .. "," .. row]
 end
 
+function Battle:isOrderable(column, row)
+  return self.orderTargets[column .. "," .. row]
+end
+
+function Battle:isOrderMoveReachable(column, row)
+  return self.orderMoveRange[column .. "," .. row]
+end
+
 function Battle:isInGrappleRange(column, row)
   return self.grappleRange[column .. "," .. row]
 end
@@ -423,6 +462,10 @@ function Battle:getCursorColumnRow(activeCharacter)
     return activeCharacter.column, activeCharacter.row
   elseif self.mode == "grapple" then
     return self.grappleTarget.column, self.grappleTarget.row
+  elseif self.mode == "order_target" then
+    return self.orderTarget.column, self.orderTarget.row
+  elseif self.mode == "order_move" then
+    return self.orderMoveTarget.column, self.orderMoveTarget.row
   end
   return activeCharacter.column, activeCharacter.row
 end
@@ -686,6 +729,10 @@ end
 
 function Battle:isTank(character)
   return character and character.className == "tank" and self:isHeroCharacter(character)
+end
+
+function Battle:isTactician(character)
+  return character and character.className == "tactician" and self:isHeroCharacter(character)
 end
 
 function Battle:clearTankEffect()
@@ -978,6 +1025,165 @@ function Battle:getGrappleTargets(activeCharacter)
   return range, targets
 end
 
+function Battle:getOrderTargets(activeCharacter)
+  local targets = {}
+  local range = self:getTilesInRange(activeCharacter.column, activeCharacter.row, 6)
+
+  for _, character in ipairs(self.characters) do
+    if character ~= activeCharacter and character.team == activeCharacter.team and range[character.column .. "," .. character.row] then
+      targets[character.column .. "," .. character.row] = true
+    end
+  end
+
+  return targets
+end
+
+function Battle:getOrderMoveRange(targetCharacter)
+  local maxMoves = math.floor((targetCharacter.mov or 0) * 0.5) + 2
+  return self:getReachableTiles(targetCharacter.column, targetCharacter.row, maxMoves, targetCharacter)
+end
+
+function Battle:startOrderSelection(activeCharacter)
+  if self.turnPhase ~= "action" or not self:isTactician(activeCharacter) then
+    return false
+  end
+
+  self.orderTargets = self:getOrderTargets(activeCharacter)
+  self.orderSelectedCharacter = nil
+  local nearestDistance = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isOrderable(character.column, character.row) then
+      local distance = self:getTileDistance(activeCharacter.column, activeCharacter.row, character.column, character.row)
+      if distance and (nearestDistance == nil or distance < nearestDistance) then
+        nearestDistance = distance
+        self.orderTarget.column = character.column
+        self.orderTarget.row = character.row
+      end
+    end
+  end
+
+  if nearestDistance then
+    self.mode = "order_target"
+    return true
+  end
+
+  self.orderTargets = {}
+  return false
+end
+
+function Battle:startOrderMoveSelection(activeCharacter)
+  local target = self:getCharacterAt(self.orderTarget.column, self.orderTarget.row, nil)
+  if not target or target == activeCharacter or target.team ~= activeCharacter.team then
+    return false
+  end
+
+  self.orderSelectedCharacter = target
+  self.orderMoveRange = self:getOrderMoveRange(target)
+  self.orderMoveTarget.column = target.column
+  self.orderMoveTarget.row = target.row
+  self.mode = "order_move"
+  return true
+end
+
+function Battle:selectOrderTargetInDirection(originColumn, originRow, key)
+  local originX, originY = self:getGridVector(originColumn, originRow)
+  local bestColumn = originColumn
+  local bestRow = originRow
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, character in ipairs(self.characters) do
+    if self:isOrderable(character.column, character.row) then
+      local targetX, targetY = self:getGridVector(character.column, character.row)
+      local dx = targetX - originX
+      local dy = targetY - originY
+      local primary = nil
+      local secondary = nil
+
+      if key == "left" and dx < 0 then
+        primary = -dx
+        secondary = math.abs(dy)
+      elseif key == "right" and dx > 0 then
+        primary = dx
+        secondary = math.abs(dy)
+      elseif key == "up" and dy < 0 then
+        primary = -dy
+        secondary = math.abs(dx)
+      elseif key == "down" and dy > 0 then
+        primary = dy
+        secondary = math.abs(dx)
+      end
+
+      if primary and (bestPrimary == nil or primary < bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = character.column
+        bestRow = character.row
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:moveOrderTargetByKey(key)
+  self.orderTarget.column, self.orderTarget.row = self:selectOrderTargetInDirection(
+    self.orderTarget.column,
+    self.orderTarget.row,
+    key
+  )
+end
+
+function Battle:moveOrderMoveTargetByKey(key)
+  local nextColumn = self.orderMoveTarget.column
+  local nextRow = self.orderMoveTarget.row
+  local neighbors = self:getHexNeighbors(self.orderMoveTarget.column, self.orderMoveTarget.row)
+  local candidates = {}
+  local isEvenColumn = (self.orderMoveTarget.column % 2 == 0)
+
+  if key == "left" then
+    candidates[1] = neighbors[2]
+    candidates[2] = neighbors[6]
+  elseif key == "right" then
+    candidates[1] = neighbors[1]
+    candidates[2] = neighbors[5]
+  elseif key == "up" then
+    candidates[1] = neighbors[3]
+    if isEvenColumn then
+      candidates[2] = neighbors[5]
+      candidates[3] = neighbors[6]
+    else
+      candidates[2] = neighbors[1]
+      candidates[3] = neighbors[2]
+    end
+  elseif key == "down" then
+    candidates[1] = neighbors[4]
+    if isEvenColumn then
+      candidates[2] = neighbors[1]
+      candidates[3] = neighbors[2]
+    else
+      candidates[2] = neighbors[5]
+      candidates[3] = neighbors[6]
+    end
+  end
+
+  for _, candidate in ipairs(candidates) do
+    if candidate then
+      local c = candidate[1]
+      local r = candidate[2]
+      if self:isInMap(c, r) and self:isOrderMoveReachable(c, r) then
+        nextColumn = c
+        nextRow = r
+        break
+      end
+    end
+  end
+
+  self.orderMoveTarget.column = nextColumn
+  self.orderMoveTarget.row = nextRow
+end
+
 function Battle:startHealSelection(activeCharacter)
   if self.turnPhase ~= "move" or not self:isHealer(activeCharacter) then
     return false
@@ -1032,6 +1238,9 @@ function Battle:startGrappleSelection(activeCharacter)
 
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
   return false
 end
 
@@ -1133,6 +1342,52 @@ function Battle:moveGrappleTargetByKey(activeCharacter, key)
   )
 end
 
+function Battle:confirmOrder(activeCharacter)
+  if self.mode == "order_target" then
+    if not self:isOrderable(self.orderTarget.column, self.orderTarget.row) then
+      return false
+    end
+    return self:startOrderMoveSelection(activeCharacter)
+  end
+
+  if self.mode ~= "order_move" or not self.orderSelectedCharacter then
+    return false
+  end
+
+  local target = self.orderSelectedCharacter
+  local destinationColumn = self.orderMoveTarget.column
+  local destinationRow = self.orderMoveTarget.row
+  if destinationColumn ~= target.column or destinationRow ~= target.row then
+    if not self:isOrderMoveReachable(destinationColumn, destinationRow) then
+      return false
+    end
+
+    self.movingCharacter = target
+    local path = self:getPathToTarget(target.column, target.row, destinationColumn, destinationRow)
+    if path and #path > 1 then
+      self:updateCharacterDirection(target, path[1].column, path[2].column)
+      self.orderTargets = {}
+      self.orderMoveRange = {}
+      self.mode = "animating"
+      self.moveAnimation = {
+        character = target,
+        path = path,
+        step = 1,
+        timer = 0,
+        completedActionCharacter = activeCharacter,
+      }
+      return true
+    end
+  end
+
+  self.orderTargets = {}
+  self.orderMoveRange = {}
+  self.orderSelectedCharacter = nil
+  self.mode = "menu"
+  self:completeAction(activeCharacter)
+  return true
+end
+
 function Battle:confirmHeal(activeCharacter)
   if not self:isHealable(self.healTarget.column, self.healTarget.row) then
     return false
@@ -1191,6 +1446,9 @@ function Battle:confirmGrapple(activeCharacter)
 
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
 
   if destinationColumn == target.column and destinationRow == target.row then
     self.mode = "menu"
@@ -1437,7 +1695,7 @@ function Battle:shouldLeaveAlgae(character)
   return character and character.team == "enemy" and character.className == "noye"
 end
 
-function Battle:applyLandingTileEffects(character, column, row)
+function Battle:applyLandingTileEffects(character, column, row, completedActionCharacter)
   if not character or not self:isHeroCharacter(character) then
     return false
   end
@@ -1453,7 +1711,7 @@ function Battle:applyLandingTileEffects(character, column, row)
     self.mode = "death_animating"
     self.deathAnimation = {
       character = character,
-      attacker = character,
+      attacker = completedActionCharacter or character,
       timer = 0,
     }
     return true
@@ -1533,6 +1791,9 @@ function Battle:cancelGrappleMode()
   self.mode = "menu"
   self.grappleRange = {}
   self.grappleTargets = {}
+  self.orderTargets = {}
+  self.orderSelectedCharacter = nil
+  self.orderMoveRange = {}
 end
 
 function Battle:update(dt)
@@ -1556,10 +1817,14 @@ function Battle:update(dt)
         end
         self.moveAnimation = nil
         self.movingCharacter = nil
-        if self:applyLandingTileEffects(animation.character, finalNode.column, finalNode.row) then
+        if self:applyLandingTileEffects(animation.character, finalNode.column, finalNode.row, animation.completedActionCharacter) then
           return
         end
-        self:completeMovePhase(animation.character)
+        if animation.completedActionCharacter then
+          self:completeAction(animation.completedActionCharacter)
+        else
+          self:completeMovePhase(animation.character)
+        end
         return
       end
 
