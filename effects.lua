@@ -234,32 +234,38 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
     love.graphics.setColor(1, 1, 1, 1)
   elseif attackAnimation and attackAnimation.kind == "poison" and self.poisonTile then
     local poisonX, poisonY = gridToScreen(attackAnimation.target.column, attackAnimation.target.row)
-    local poisonDuration = battle.attackWindupDuration + battle.attackLungeDuration + battle.attackImpactDuration
-    local poisonRatio = math.min(1, attackAnimation.timer / poisonDuration)
     local centerX = poisonX + (tileW * 0.5)
     local centerY = poisonY + (tileH * 0.5)
+    local spawnInterval = 0.045
+    local fallDuration = 0.24
+    local impactHold = 0.08
     for index = 1, 12 do
-      local delay = (index - 1) * 0.025
-      local localTimer = math.max(0, attackAnimation.timer - delay)
-      local dropRatio = math.min(1, localTimer / math.max(0.12, poisonDuration - delay))
-      if localTimer > 0 and dropRatio < 1.0 then
-        local columnOffset = (((index - 1) % 4) - 1.5) * tileW * 0.18
-        local rowOffset = (math.floor((index - 1) / 4) - 1) * tileH * 0.08
-        local wobble = math.sin((index * 0.9) + (dropRatio * 8.0)) * tileW * 0.05
-        local startY = centerY - tileH * (1.4 + (0.12 * (index % 3)))
-        local endY = centerY - tileH * 0.08 + rowOffset
-        local drawX = centerX + columnOffset + wobble
-        local drawY = startY + ((endY - startY) * dropRatio)
-        local scale = (tileW / self.poisonTile:getWidth()) * (0.12 + (0.06 * (index % 3)))
-        local alpha = math.min(1, 0.25 + (0.85 * poisonRatio)) * (1 - (dropRatio * 0.2))
-        love.graphics.setColor(0.78, 1, 0.42, alpha)
+      local delay = (index - 1) * spawnInterval
+      local localTimer = attackAnimation.timer - delay
+      if localTimer > 0 then
+        local fallRatio = math.min(1, localTimer / fallDuration)
+        local impactRatio = math.max(0, math.min(1, (localTimer - fallDuration) / impactHold))
+        local gravityRatio = fallRatio * fallRatio
+        local lane = ((index - 1) % 4) - 1.5
+        local band = math.floor((index - 1) / 4) - 1
+        local spreadX = lane * tileW * 0.14
+        local driftX = math.sin((index * 1.73) + (fallRatio * 3.2)) * tileW * 0.02
+        local startY = centerY - tileH * (1.65 + (0.08 * (index % 3)))
+        local endY = centerY - tileH * 0.12 + band * tileH * 0.06
+        local drawX = centerX + spreadX + driftX
+        local drawY = startY + ((endY - startY) * gravityRatio)
+        local squash = impactRatio > 0 and (1 + (0.35 * (1 - impactRatio))) or 1
+        local stretch = impactRatio > 0 and (1 - (0.25 * (1 - impactRatio))) or 1
+        local scale = (tileW / self.poisonTile:getWidth()) * (0.11 + (0.02 * (index % 3)))
+        local alpha = impactRatio > 0 and (1 - (impactRatio * 0.35)) or (0.3 + (0.7 * fallRatio))
+        love.graphics.setColor(0.76, 1, 0.4, alpha)
         love.graphics.draw(
           self.poisonTile,
           drawX,
           drawY,
           0,
-          scale,
-          scale,
+          scale * squash,
+          scale * stretch,
           self.poisonTile:getWidth() * 0.5,
           self.poisonTile:getHeight() * 0.5
         )

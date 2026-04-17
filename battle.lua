@@ -2228,7 +2228,7 @@ function Battle:update(dt)
         end
       else
         animation.target.hp = animation.target.hp - animation.damage
-        if self:isHeroCharacter(animation.target) then
+        if self:isHeroCharacter(animation.target) and animation.kind ~= "poison" then
           self:triggerScreenShake(0.24, 14)
         end
         if animation.critical then
