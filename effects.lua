@@ -50,11 +50,6 @@ end
 
 function Effects:expireTerrainEffects()
   local minCreatedTurn = self.turnNumber - self.terrainEffectLifetimeTurns
-  for key, entry in pairs(self.thorns) do
-    if type(entry) == "table" and (entry.turnNumber or 1) < minCreatedTurn then
-      self.thorns[key] = nil
-    end
-  end
   for key, entry in pairs(self.algae) do
     if type(entry) == "table" and (entry.turnNumber or 1) < minCreatedTurn then
       self.algae[key] = nil
@@ -62,6 +57,16 @@ function Effects:expireTerrainEffects()
   end
 end
 
+function Effects:clearThornsByOwner(owner)
+  if not owner then
+    return
+  end
+  for key, entry in pairs(self.thorns) do
+    if type(entry) == "table" and entry.owner == owner then
+      self.thorns[key] = nil
+    end
+  end
+end
 
 function Effects:hasThornsAt(column, row)
   return self.thorns[column .. "," .. row] ~= nil
@@ -71,10 +76,10 @@ function Effects:hasAlgaeAt(column, row)
   return self.algae[column .. "," .. row] ~= nil
 end
 
-function Effects:addThorns(column, row)
+function Effects:addThorns(column, row, owner)
   self.thorns[column .. "," .. row] = {
     createdAt = love.timer.getTime(),
-    turnNumber = self.turnNumber,
+    owner = owner,
   }
   print(string.format("[thorns] add at %d,%d", column, row))
 end

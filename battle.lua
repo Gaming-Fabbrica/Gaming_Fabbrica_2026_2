@@ -156,9 +156,9 @@ function Battle:hasAlgaeAt(column, row)
   return self.effects and self.effects:hasAlgaeAt(column, row) or false
 end
 
-function Battle:addThorns(column, row)
+function Battle:addThorns(column, row, owner)
   if self.effects then
-    self.effects:addThorns(column, row)
+    self.effects:addThorns(column, row, owner)
   end
 end
 
@@ -1727,11 +1727,94 @@ function Battle:calculateCounterDamage(attacker, defender)
 end
 
 function Battle:defeatCharacter(target)
+  if self.effects then
+    self.effects:clearThornsByOwner(target)
+  end
   for index, character in ipairs(self.characters) do
     if character == target then
       table.remove(self.characters, index)
       return
     end
+  end
+end
+
+function Battle:isEffectTileValid(column, row)
+  return self:isInMap(column, row) and self.map[column] and self.map[column][row]
+end
+
+function Battle:getBackCenterTile(column, row, direction)
+  local originX, originY = self:getGridVector(column, row)
+  local bestColumn = nil
+  local bestRow = nil
+  local bestPrimary = nil
+  local bestSecondary = nil
+
+  for _, neighbor in ipairs(self:getHexNeighbors(column, row)) do
+    local nextColumn = neighbor[1]
+    local nextRow = neighbor[2]
+    if self:isEffectTileValid(nextColumn, nextRow) then
+      local nextX, nextY = self:getGridVector(nextColumn, nextRow)
+      local dx = nextX - originX
+      local dy = nextY - originY
+      local primary = direction == "left" and dx or -dx
+      local secondary = math.abs(dy)
+      if primary > 0 and (bestPrimary == nil or primary > bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
+        bestPrimary = primary
+        bestSecondary = secondary
+        bestColumn = nextColumn
+        bestRow = nextRow
+      end
+    end
+  end
+
+  return bestColumn, bestRow
+end
+
+function Battle:getThornArcTiles(character, column, row)
+  local tiles = {}
+  if not character then
+    return tiles
+  end
+
+  local backColumn, backRow = self:getBackCenterTile(column, row, character.direction or "right")
+  if not backColumn or not backRow then
+    return tiles
+  end
+
+  local added = {}
+  local function addTile(tileColumn, tileRow)
+    local key = tileColumn .. "," .. tileRow
+    if not added[key] and self:isEffectTileValid(tileColumn, tileRow) then
+      added[key] = true
+      tiles[#tiles + 1] = {column = tileColumn, row = tileRow}
+    end
+  end
+
+  addTile(backColumn, backRow)
+
+  local aroundCharacter = {}
+  for _, neighbor in ipairs(self:getHexNeighbors(column, row)) do
+    aroundCharacter[neighbor[1] .. "," .. neighbor[2]] = true
+  end
+
+  for _, neighbor in ipairs(self:getHexNeighbors(backColumn, backRow)) do
+    local nextColumn = neighbor[1]
+    local nextRow = neighbor[2]
+    local key = nextColumn .. "," .. nextRow
+    if key ~= (column .. "," .. row) and aroundCharacter[key] then
+      addTile(nextColumn, nextRow)
+    end
+  end
+
+  return tiles
+end
+
+function Battle:addThornArc(character, column, row)
+  if self.effects then
+    self.effects:clearThornsByOwner(character)
+  end
+  for _, tile in ipairs(self:getThornArcTiles(character, column, row)) do
+    self:addThorns(tile.column, tile.row, character)
   end
 end
 
@@ -1858,7 +1941,7 @@ function Battle:update(dt)
         local finalNode = animation.path[#animation.path]
         animation.character:setPosition(finalNode.column, finalNode.row)
         if self:shouldLeaveThorns(animation.character) then
-          self:addThorns(finalNode.column, finalNode.row)
+          self:addThornArc(animation.character, finalNode.column, finalNode.row)
         end
         if self:shouldLeaveAlgae(animation.character) then
           self:addAlgae(finalNode.column, finalNode.row)
@@ -1878,14 +1961,14 @@ function Battle:update(dt)
 
       local fromNode = animation.path[animation.step]
       local toNode = animation.path[animation.step + 1]
+      if fromNode and toNode then
+        self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
+      end
       if self:shouldLeaveThorns(animation.character) and fromNode then
-        self:addThorns(fromNode.column, fromNode.row)
+        self:addThornArc(animation.character, fromNode.column, fromNode.row)
       end
       if self:shouldLeaveAlgae(animation.character) and fromNode then
         self:addAlgae(fromNode.column, fromNode.row)
-      end
-      if fromNode and toNode then
-        self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
       end
     end
     return
