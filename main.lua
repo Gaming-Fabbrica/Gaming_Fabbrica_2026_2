@@ -593,8 +593,9 @@ loadSprites = function(playerSpawnPositions, enemySpawnPositions)
         local classInfo = classPool[index]
         local spriteName = classInfo.sprites[math.random(#classInfo.sprites)]
         local spritePath = "assets/sprites/heroes/" .. spriteName .. ".png"
+        local givenName = Character.getHeroFirstName(classInfo.className, spritePath) or (classInfo.className .. "_" .. teamName .. "_" .. index)
         roster[#roster + 1] = Character.new(
-          classInfo.className .. "_" .. teamName .. "_" .. index,
+          givenName,
           spritePath,
           spawn.column,
           spawn.row,
@@ -618,8 +619,9 @@ loadSprites = function(playerSpawnPositions, enemySpawnPositions)
     local classInfo = classPool[index]
     local spriteName = classInfo.sprites[math.random(#classInfo.sprites)]
     local spritePath = "assets/sprites/heroes/" .. spriteName .. ".png"
+    local givenName = Character.getHeroFirstName(classInfo.className, spritePath) or (classInfo.className .. "_" .. index)
     roster[#roster + 1] = Character.new(
-      classInfo.className .. "_" .. index,
+      givenName,
       spritePath,
       spawn.column,
       spawn.row,
@@ -1381,11 +1383,14 @@ function love.draw()
   end
 
   if active then
+    local activeName = Character.getDisplayName(active)
+    local activeClassName = active.displayClassName or active.className or "Inconnu"
     local hudText = string.format(
-      Rules.PVP and "Tour %d: %s  %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
+      Rules.PVP and "Tour %d: %s  %s (%s)  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s (%s)  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
       currentTurn,
-      Rules.PVP and Character.getTeamDisplayName(active.team) or active.displayClassName or active.className or "Inconnu",
-      Rules.PVP and (active.displayClassName or active.className or "Inconnu") or active.hp,
+      Rules.PVP and Character.getTeamDisplayName(active.team) or activeName,
+      Rules.PVP and activeName or activeClassName,
+      Rules.PVP and activeClassName or active.hp,
       Rules.PVP and active.hp or active.mov,
       Rules.PVP and active.mov or active.def,
       Rules.PVP and active.def or active.atk,

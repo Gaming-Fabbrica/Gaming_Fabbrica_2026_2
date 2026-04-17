@@ -50,6 +50,19 @@ Character.teamColors = {
   enemy = {0.9, 0.18, 0.18},
 }
 
+Character.heroFirstNames = {
+  archer = {boy = "Arenzu", girl = "Arenza"},
+  atk_mov = {boy = "Baldoriu", girl = "Baldoria"},
+  counter = {boy = "Tomus", girl = "Tomina"},
+  free = {boy = "Ascalu", girl = "Ascala"},
+  grab = {boy = "Cirsoriu", girl = "Cirsoria"},
+  healer = {boy = "Calandru", girl = "Calandra"},
+  javelineer = {boy = "Castino", girl = "Castina"},
+  lancer = {boy = "Chimoiu", girl = "Chimoia"},
+  tactician = {boy = "Garmato", girl = "Garmata"},
+  tank = {boy = "Ingretu", girl = "Ingreta"},
+}
+
 function Character.getFrenchClassName(className)
   return Character.frenchClassNames[className] or className or "Inconnu"
 end
@@ -60,6 +73,37 @@ end
 
 function Character.getTeamColor(teamName)
   return Character.teamColors[teamName] or {1, 1, 1}
+end
+
+function Character.inferGender(spritePath)
+  if type(spritePath) ~= "string" then
+    return nil
+  end
+  if spritePath:find("_boy", 1, true) then
+    return "boy"
+  elseif spritePath:find("_girl", 1, true) then
+    return "girl"
+  end
+  return nil
+end
+
+function Character.getHeroFirstName(className, spritePath)
+  local names = Character.heroFirstNames[className]
+  if not names then
+    return nil
+  end
+  local gender = Character.inferGender(spritePath)
+  if gender and names[gender] then
+    return names[gender]
+  end
+  return names.boy or names.girl
+end
+
+function Character.getDisplayName(character)
+  if character and character.name and character.name ~= "" then
+    return character.name
+  end
+  return character and (character.displayClassName or character.className) or "Inconnu"
 end
 
 function Character.rollHeroStats(className)
