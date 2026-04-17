@@ -10,6 +10,7 @@ local Rules = require("rules")
 local cols = 20
 local rows = 20
 local PVP = Rules.PVP
+local SWAMP = Rules.SWAMP
 
 local mapBackground = nil
 local tile = nil
@@ -139,6 +140,20 @@ local enemyArchetypes = {
 }
 local enemySpawnCount = 6
 
+local function getEnemyArchetypesForTheme()
+  if not SWAMP then
+    return enemyArchetypes
+  end
+
+  local filtered = {}
+  for _, enemyInfo in ipairs(enemyArchetypes) do
+    if enemyInfo.name ~= "loup3" then
+      filtered[#filtered + 1] = enemyInfo
+    end
+  end
+  return filtered
+end
+
 local function getBattleResultAlpha()
   return math.min(1, battleResultTimer / battleResultDuration)
 end
@@ -184,7 +199,8 @@ local function resetGame()
   obstacles = {}
   characters = {}
 
-  mapBackground = love.graphics.newImage("assets/map_bg2.png")
+  local mapBackgroundPath = SWAMP and "assets/swamp_map_bg.png" or "assets/map_bg2.png"
+  mapBackground = love.graphics.newImage(mapBackgroundPath)
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
@@ -492,7 +508,7 @@ loadSprites = function(playerSpawnPositions, enemySpawnPositions)
   end
 
   local classPool = shuffledCopy(availableClasses)
-  local enemyPool = shuffledCopy(enemyArchetypes)
+  local enemyPool = shuffledCopy(getEnemyArchetypesForTheme())
 
   for index, spawn in ipairs(playerSpawnPositions) do
     local classInfo = classPool[index]

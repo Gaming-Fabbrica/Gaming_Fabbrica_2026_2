@@ -15,6 +15,7 @@ end
 
 local Rules = {
   PVP = hasFlag("--pvp"),
+  SWAMP = hasFlag("--swamp"),
 }
 
 return Rules

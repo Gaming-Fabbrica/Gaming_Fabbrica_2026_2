@@ -1,3 +1,5 @@
+local Rules = require("rules")
+
 local Obstacle = {}
 Obstacle.__index = Obstacle
 
@@ -7,25 +9,63 @@ local TREE_SCALE = 2.5
 local STONE_SCALE = 0.9075
 local STONE_OFFSET_Y = -48
 local TREE_PIVOT_RATIO = 0.9
-local STONE_VARIANTS = {
-  "assets/sprites/stone1.png",
-  "assets/sprites/stone2.png",
-  "assets/sprites/stone3.png",
-  "assets/sprites/stone4.png",
+local THEMES = {
+  forest = {
+    stone = {
+      "assets/sprites/stone1.png",
+      "assets/sprites/stone2.png",
+      "assets/sprites/stone3.png",
+      "assets/sprites/stone4.png",
+    },
+    bush = {
+      "assets/sprites/bush1.png",
+      "assets/sprites/bush2.png",
+      "assets/sprites/bush3.png",
+      "assets/sprites/bush4.png",
+      "assets/sprites/bush5.png",
+      "assets/sprites/bush6.png",
+    },
+    tree = {
+      "assets/sprites/tree1.png",
+      "assets/sprites/tree2.png",
+      "assets/sprites/tree3.png",
+      "assets/sprites/tree4.png",
+      "assets/sprites/tree5.png",
+      "assets/sprites/tree6.png",
+    },
+  },
+  swamp = {
+    stone = {
+      "assets/sprites/swamp_stone1.png",
+      "assets/sprites/swamp_stone2.png",
+      "assets/sprites/swamp_stone3.png",
+      "assets/sprites/swamp_stone4.png",
+    },
+    bush = {
+      "assets/sprites/swamp_bush1.png",
+      "assets/sprites/swamp_bush2.png",
+      "assets/sprites/swamp_bush3.png",
+      "assets/sprites/swamp_bush4.png",
+      "assets/sprites/swamp_bush5.png",
+      "assets/sprites/swamp_bush6.png",
+    },
+    tree = {
+      "assets/sprites/swamp_tree1.png",
+      "assets/sprites/swamp_tree2.png",
+      "assets/sprites/swamp_tree3.png",
+      "assets/sprites/swamp_tree4.png",
+      "assets/sprites/swamp_tree5.png",
+      "assets/sprites/swamp_tree6.png",
+    },
+  },
 }
-local BUSH_VARIANTS = {
-  "assets/sprites/bush1.png",
-  "assets/sprites/bush2.png",
-  "assets/sprites/bush3.png",
-}
-local TREE_VARIANTS = {
-  "assets/sprites/tree1.png",
-  "assets/sprites/tree2.png",
-  "assets/sprites/tree3.png",
-  "assets/sprites/tree4.png",
-  "assets/sprites/tree5.png",
-  "assets/sprites/tree6.png",
-}
+
+local function getThemeVariants()
+  if Rules.SWAMP then
+    return THEMES.swamp
+  end
+  return THEMES.forest
+end
 
 function Obstacle.new(kind, column, row, spritePath)
   local sprite = love.graphics.newImage(spritePath)
@@ -47,12 +87,13 @@ function Obstacle.new(kind, column, row, spritePath)
 end
 
 function Obstacle.randomOfKind(kind, column, row)
+  local theme = getThemeVariants()
   if kind == "stone" then
-    return Obstacle.new("stone", column, row, STONE_VARIANTS[math.random(#STONE_VARIANTS)])
+    return Obstacle.new("stone", column, row, theme.stone[math.random(#theme.stone)])
   elseif kind == "bush" then
-    return Obstacle.new("bush", column, row, BUSH_VARIANTS[math.random(#BUSH_VARIANTS)])
+    return Obstacle.new("bush", column, row, theme.bush[math.random(#theme.bush)])
   end
-  return Obstacle.new("tree", column, row, TREE_VARIANTS[math.random(#TREE_VARIANTS)])
+  return Obstacle.new("tree", column, row, theme.tree[math.random(#theme.tree)])
 end
 
 function Obstacle.buildDrawList(obstacles, gridToScreen, tileW, tileH)
@@ -83,8 +124,11 @@ function Obstacle.drawEntry(entry, tileW, tileH, timeSeconds)
   local tileCenterY = entry.y + (tileH * 0.5)
 
   if obstacle.kind == "tree" then
-    local swayPhase = (timeSeconds * TREE_SWAY_SPEED) + (obstacle.column * 0.41) + (obstacle.row * 0.23)
-    local swayAngle = math.sin(swayPhase) * TREE_SWAY_ANGLE
+    local swayAngle = 0
+    if not Rules.SWAMP then
+      local swayPhase = (timeSeconds * TREE_SWAY_SPEED) + (obstacle.column * 0.41) + (obstacle.row * 0.23)
+      swayAngle = math.sin(swayPhase) * TREE_SWAY_ANGLE
+    end
 
     love.graphics.draw(
       sprite,
