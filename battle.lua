@@ -48,6 +48,8 @@ function Battle.new(cols, rows, map)
     deathQueue = nil,
     completedActionCharacter = nil,
     returnToMoveAfterAction = false,
+    returnToActionAfterAction = false,
+    moveCompletesAction = false,
     actionSpent = false,
     tankEffect = nil,
     pendingScreenShake = nil,
@@ -141,6 +143,8 @@ function Battle:startTurn(activeCharacter)
   self.movingCharacter = nil
   self.completedActionCharacter = nil
   self.returnToMoveAfterAction = false
+  self.returnToActionAfterAction = false
+  self.moveCompletesAction = false
   self.actionSpent = false
 end
 
@@ -194,10 +198,19 @@ function Battle:startActionPhase()
   self.orderSelectedCharacter = nil
   self.orderMoveRange = {}
   self.movingCharacter = nil
+  self.moveCompletesAction = false
 end
 
 function Battle:isActionFirstCapable(character)
   return character and character.className == "atk_mov" and self:isHeroCharacter(character)
+end
+
+function Battle:isMovePhaseAttacker(character)
+  return character and character.team == "enemy" and character.className == "loup2"
+end
+
+function Battle:isActionPhaseMover(character)
+  return character and character.team == "enemy" and character.className == "loup1"
 end
 
 function Battle:hasActionSpent()
@@ -236,6 +249,11 @@ function Battle:completeAction(actor)
     self.movingCharacter = nil
     return
   end
+  if self.returnToActionAfterAction then
+    self.returnToActionAfterAction = false
+    self:startActionPhase()
+    return
+  end
   self.mode = "menu"
   self.completedActionCharacter = actor
 end
@@ -254,6 +272,7 @@ function Battle:setMode(mode)
   if mode ~= "move" then
     self.moveRange = {}
     self.movingCharacter = nil
+    self.moveCompletesAction = false
   end
   if mode ~= "animating" then
     self.moveAnimation = nil
@@ -929,10 +948,12 @@ function Battle:selectOpponentAttackTargetInDirection(activeCharacter, originCol
 end
 
 function Battle:startAttackSelection(activeCharacter)
-  if self.turnPhase ~= "action" then
+  local isMovePhaseAttack = self.turnPhase == "move" and self:isMovePhaseAttacker(activeCharacter)
+  if self.turnPhase ~= "action" and not isMovePhaseAttack then
     return false
   end
 
+  self.returnToActionAfterAction = false
   self.attackRange = self:getAttackableTiles(activeCharacter)
   if self:isSplashAttacker(activeCharacter) then
     local bestCount = nil
@@ -963,6 +984,7 @@ function Battle:startAttackSelection(activeCharacter)
 
     if bestCount then
       self.mode = "attack"
+      self.returnToActionAfterAction = isMovePhaseAttack
       return true
     end
 
@@ -990,6 +1012,7 @@ function Battle:startAttackSelection(activeCharacter)
 
   if nearestDistance then
     self.mode = "attack"
+    self.returnToActionAfterAction = isMovePhaseAttack
     return true
   end
 
@@ -1594,6 +1617,19 @@ function Battle:moveAttackTargetByKey(activeCharacter, key)
   )
 end
 
+function Battle:startActionMoveSelection(activeCharacter)
+  if self.turnPhase ~= "action" or not self:isActionPhaseMover(activeCharacter) then
+    return false
+  end
+  self.movingCharacter = activeCharacter
+  self.moveRange = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov, activeCharacter)
+  self.moveTarget.column = activeCharacter.column
+  self.moveTarget.row = activeCharacter.row
+  self.moveCompletesAction = true
+  self.mode = "move"
+  return true
+end
+
 function Battle:confirmMove(activeCharacter)
   if self:isReachable(self.moveTarget.column, self.moveTarget.row) then
     self.movingCharacter = activeCharacter
@@ -1612,7 +1648,9 @@ function Battle:confirmMove(activeCharacter)
         path = path,
         step = 1,
         timer = 0,
+        completedActionCharacter = self.moveCompletesAction and activeCharacter or nil,
       }
+      self.moveCompletesAction = false
       return true
     end
   end
@@ -1675,6 +1713,10 @@ end
 
 function Battle:isKickAttacker(character)
   return character and character.team == "enemy" and (character.className == "affame" or character.className == "affamé")
+end
+
+function Battle:isColdAttacker(character)
+  return character and character.team == "enemy" and character.className == "loup3"
 end
 
 function Battle:calculateDamage(attacker, defender)
@@ -1748,25 +1790,30 @@ function Battle:isEffectTileValid(column, row)
   return self:isInMap(column, row) and self.map[column] and self.map[column][row]
 end
 
-function Battle:getBackCenterTile(column, row, direction)
+function Battle:getBackCenterTile(column, row, fromColumn, fromRow)
   local originX, originY = self:getGridVector(column, row)
+  local fromX = nil
+  local fromY = nil
+  if fromColumn and fromRow then
+    fromX, fromY = self:getGridVector(fromColumn, fromRow)
+  end
   local bestColumn = nil
   local bestRow = nil
-  local bestPrimary = nil
-  local bestSecondary = nil
+  local bestScore = nil
 
   for _, neighbor in ipairs(self:getHexNeighbors(column, row)) do
     local nextColumn = neighbor[1]
     local nextRow = neighbor[2]
     if self:isEffectTileValid(nextColumn, nextRow) then
-      local nextX, nextY = self:getGridVector(nextColumn, nextRow)
-      local dx = nextX - originX
-      local dy = nextY - originY
-      local primary = direction == "left" and dx or -dx
-      local secondary = math.abs(dy)
-      if primary > 0 and (bestPrimary == nil or primary > bestPrimary or (primary == bestPrimary and secondary < bestSecondary)) then
-        bestPrimary = primary
-        bestSecondary = secondary
+      if fromX and fromY then
+        local nextX, nextY = self:getGridVector(nextColumn, nextRow)
+        local score = ((nextX - originX) * (fromX - originX)) + ((nextY - originY) * (fromY - originY))
+        if score > 0 and (bestScore == nil or score > bestScore) then
+          bestScore = score
+          bestColumn = nextColumn
+          bestRow = nextRow
+        end
+      elseif bestColumn == nil then
         bestColumn = nextColumn
         bestRow = nextRow
       end
@@ -1776,13 +1823,13 @@ function Battle:getBackCenterTile(column, row, direction)
   return bestColumn, bestRow
 end
 
-function Battle:getThornArcTiles(character, column, row)
+function Battle:getThornArcTiles(character, column, row, fromColumn, fromRow)
   local tiles = {}
   if not character then
     return tiles
   end
 
-  local backColumn, backRow = self:getBackCenterTile(column, row, character.direction or "right")
+  local backColumn, backRow = self:getBackCenterTile(column, row, fromColumn, fromRow)
   if not backColumn or not backRow then
     return tiles
   end
@@ -1815,11 +1862,11 @@ function Battle:getThornArcTiles(character, column, row)
   return tiles
 end
 
-function Battle:addThornArc(character, column, row)
+function Battle:addThornArc(character, column, row, fromColumn, fromRow)
   if self.effects then
     self.effects:clearThornsByOwner(character)
   end
-  for _, tile in ipairs(self:getThornArcTiles(character, column, row)) do
+  for _, tile in ipairs(self:getThornArcTiles(character, column, row, fromColumn, fromRow)) do
     self:addThorns(tile.column, tile.row, character)
   end
 end
@@ -1895,6 +1942,7 @@ function Battle:confirmAttack(activeCharacter)
   local damage, critical = self:calculateDamage(activeCharacter, target)
   self.mode = "attack_animating"
   self.attackAnimation = {
+    kind = self:isColdAttacker(activeCharacter) and "cold" or nil,
     attacker = activeCharacter,
     target = target,
     startHp = target.hp,
@@ -1912,11 +1960,13 @@ end
 function Battle:cancelMoveMode()
   self.mode = "menu"
   self.moveRange = {}
+  self.moveCompletesAction = false
 end
 
 function Battle:cancelAttackMode()
   self.mode = "menu"
   self.attackRange = {}
+  self.returnToActionAfterAction = false
 end
 
 function Battle:cancelHealMode()
@@ -1945,9 +1995,16 @@ function Battle:update(dt)
 
       if animation.step >= #animation.path then
         local finalNode = animation.path[#animation.path]
+        local previousNode = animation.path[#animation.path - 1]
         animation.character:setPosition(finalNode.column, finalNode.row)
         if self:shouldLeaveThorns(animation.character) then
-          self:addThornArc(animation.character, finalNode.column, finalNode.row)
+          self:addThornArc(
+            animation.character,
+            finalNode.column,
+            finalNode.row,
+            previousNode and previousNode.column or nil,
+            previousNode and previousNode.row or nil
+          )
         end
         if self:shouldLeaveAlgae(animation.character) then
           self:addAlgae(finalNode.column, finalNode.row)
@@ -1971,7 +2028,7 @@ function Battle:update(dt)
         self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
       end
       if self:shouldLeaveThorns(animation.character) and fromNode then
-        self:addThornArc(animation.character, fromNode.column, fromNode.row)
+        self:addThornArc(animation.character, fromNode.column, fromNode.row, toNode and toNode.column or nil, toNode and toNode.row or nil)
       end
       if self:shouldLeaveAlgae(animation.character) and fromNode then
         self:addAlgae(fromNode.column, fromNode.row)

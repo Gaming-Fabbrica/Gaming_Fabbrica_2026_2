@@ -333,7 +333,7 @@ local availableClasses = {
 }
 
 local enemyArchetypes = {
-  {name = "affame", file = "affame.png", stats = {hp = 7, mov = 4, def = 1, atk = 5, attackRange = 2}},
+  {name = "affame", file = "affame.png", stats = {hp = 7, mov = 4, def = 1, atk = 5}},
   {name = "embourbe", file = "embourbe.png", stats = {hp = 10, mov = 2, def = 4, atk = 2}},
   {name = "loup1", file = "loup1.png", stats = {hp = 5, mov = 5, def = 1, atk = 5}},
   {name = "loup2", file = "loup2.png", stats = {hp = 7, mov = 5, def = 1, atk = 4}},
@@ -1133,7 +1133,19 @@ function love.update(dt)
   Menu:setCanOrder(active and battle and battle:getTurnPhase() == "action" and battle:isTactician(active))
   if not Rules.PVP and active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
-      if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
+      if enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "move_attack_preview" then
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          battle:confirmAttack(active)
+          enemyTurnState = nil
+        end
+      elseif battle:isMovePhaseAttacker(active) and battle:startAttackSelection(active) then
+        enemyTurnState = {
+          character = active,
+          phase = "move_attack_preview",
+          timer = enemyAttackPreviewDelay,
+        }
+      elseif not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
         local targetColumn, targetRow = battle:getBestMoveTileFor(active)
         battle:startMoveSelection(active)
         battle:setMoveTarget(targetColumn, targetRow)
@@ -1191,12 +1203,45 @@ function love.update(dt)
           battle:confirmAttack(active)
           enemyTurnState = nil
         end
+      elseif enemyTurnState and enemyTurnState.character == active and enemyTurnState.phase == "action_move_preview" then
+        enemyTurnState.timer = enemyTurnState.timer - dt
+        if enemyTurnState.timer <= 0 then
+          if enemyTurnState.targetColumn ~= active.column or enemyTurnState.targetRow ~= active.row then
+            if battle:confirmMove(active) then
+              enemyTurnState = nil
+            else
+              battle:cancelMoveMode()
+              enemyTurnState = {
+                character = active,
+                phase = "end_turn_wait",
+                timer = enemySkipActionDelay,
+              }
+            end
+          else
+            battle:cancelMoveMode()
+            enemyTurnState = {
+              character = active,
+              phase = "end_turn_wait",
+              timer = enemySkipActionDelay,
+            }
+          end
+        end
       elseif not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "attack_preview" then
         if battle:startAttackSelection(active) then
           enemyTurnState = {
             character = active,
             phase = "attack_preview",
             timer = enemyAttackPreviewDelay,
+          }
+        elseif battle:startActionMoveSelection(active) then
+          local targetColumn, targetRow = battle:getBestMoveTileFor(active)
+          battle:setMoveTarget(targetColumn, targetRow)
+          enemyTurnState = {
+            character = active,
+            phase = "action_move_preview",
+            timer = enemyMovePreviewDelay,
+            targetColumn = targetColumn,
+            targetRow = targetRow,
           }
         else
           enemyTurnState = {

@@ -12,6 +12,7 @@ function Effects.new()
     thornsTile = nil,
     algaeTile = nil,
     splashTile = nil,
+    coldTile = nil,
     healHeartTile = nil,
     terrainEffectScale = 0.9,
     terrainEffectAppearDuration = 0.25,
@@ -24,6 +25,7 @@ function Effects:load()
   self.thornsTile = love.graphics.newImage("assets/sprites/effects/thorns.png")
   self.algaeTile = love.graphics.newImage("assets/sprites/effects/algae.png")
   self.splashTile = love.graphics.newImage("assets/sprites/effects/splash.png")
+  self.coldTile = love.graphics.newImage("assets/sprites/effects/cold.png")
   self.healHeartTile = love.graphics.newImage("assets/sprites/items/heart.png")
 end
 
@@ -209,6 +211,23 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
       ((tileH * 3) / self.splashTile:getHeight()) * splashScale,
       self.splashTile:getWidth() * 0.5,
       self.splashTile:getHeight() * 0.5
+    )
+    love.graphics.setColor(1, 1, 1, 1)
+  elseif attackAnimation and attackAnimation.kind == "cold" and self.coldTile then
+    local coldX, coldY = gridToScreen(attackAnimation.target.column, attackAnimation.target.row)
+    local coldRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
+    local coldScale = 0.45 + (0.75 * coldRatio)
+    local coldAlpha = math.min(1, 0.2 + (0.75 * coldRatio))
+    love.graphics.setColor(0.92, 0.98, 1, coldAlpha)
+    love.graphics.draw(
+      self.coldTile,
+      coldX + (tileW * 0.5),
+      coldY + (tileH * 0.5),
+      0,
+      (tileW / self.coldTile:getWidth()) * coldScale,
+      (tileH / self.coldTile:getHeight()) * coldScale,
+      self.coldTile:getWidth() * 0.5,
+      self.coldTile:getHeight() * 0.5
     )
     love.graphics.setColor(1, 1, 1, 1)
   end
