@@ -1469,7 +1469,7 @@ function Battle:confirmGrapple(activeCharacter)
     toColumn = destinationColumn,
     toRow = destinationRow,
     timer = 0,
-    duration = 0.35,
+    duration = 0.7,
   }
   return true
 end
