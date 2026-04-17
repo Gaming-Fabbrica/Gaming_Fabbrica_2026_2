@@ -1,21 +1,14 @@
-local function hasFlag(flag)
-  local argv = rawget(_G, "arg")
-  if type(argv) ~= "table" then
-    return false
-  end
+local Rules = {
+  PVP = false,
+  SWAMP = false,
+}
 
-  for _, value in pairs(argv) do
-    if value == flag then
-      return true
-    end
-  end
-
-  return false
+function Rules:setPvp(enabled)
+  self.PVP = enabled == true
 end
 
-local Rules = {
-  PVP = hasFlag("--pvp"),
-  SWAMP = hasFlag("--swamp"),
-}
+function Rules:setSwamp(enabled)
+  self.SWAMP = enabled == true
+end
 
 return Rules

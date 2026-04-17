@@ -10,8 +10,6 @@ local MapTheme = require("map_theme")
 
 local cols = 20
 local rows = 20
-local PVP = Rules.PVP
-local SWAMP = Rules.SWAMP
 
 local mapBackground = nil
 local tile = nil
@@ -51,9 +49,17 @@ local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
 local loadSprites = nil
+local resetGame = nil
+local titleState = {
+  active = true,
+  step = "mode",
+  selectedIndex = 1,
+  modeIndex = 1,
+  mapIndex = 1,
+}
 
 local function isHumanControlledCharacter(character)
-  return character ~= nil and (PVP or character.team == "player")
+  return character ~= nil and (Rules.PVP or character.team == "player")
 end
 
 local enemyMovePreviewDelay = 0.9
@@ -80,6 +86,114 @@ local function rebuildUi(viewWidth, viewHeight)
   resultFont = love.graphics.newFont("assets/fonts/ChildishFree 400.otf", math.max(36, math.floor((72 * uiScale) + 0.5)))
   resultPromptFont = love.graphics.newFont(math.max(14, math.floor((24 * uiScale) + 0.5)))
   Menu:setUiScale(uiScale)
+end
+
+local function ensureWindowInitialized()
+  if windowInitialized then
+    return
+  end
+
+  local screenW = love.graphics.getWidth()
+  local screenH = love.graphics.getHeight()
+  if not isWeb then
+    screenW, screenH = love.window.getDesktopDimensions(1)
+    love.window.setMode(screenW, screenH, {
+      fullscreen = true,
+      fullscreentype = "desktop",
+      highdpi = true,
+    })
+    screenW = love.graphics.getWidth()
+    screenH = love.graphics.getHeight()
+  end
+
+  rebuildUi(screenW, screenH)
+  windowInitialized = true
+end
+
+local function getTitleEntries()
+  if titleState.step == "mode" then
+    return { "Héros contre Monstres", "Héros contre Héros" }
+  end
+  return { "Forêt", "Marais" }
+end
+
+local function syncTitleSelection()
+  titleState.modeIndex = Rules.PVP and 2 or 1
+  titleState.mapIndex = Rules.SWAMP and 2 or 1
+  titleState.selectedIndex = titleState.step == "mode" and titleState.modeIndex or titleState.mapIndex
+end
+
+local function openTitleScreen()
+  titleState.active = true
+  titleState.step = "mode"
+  syncTitleSelection()
+end
+
+local function startGameFromTitleSelection()
+  Rules:setPvp(titleState.modeIndex == 2)
+  Rules:setSwamp(titleState.mapIndex == 2)
+  titleState.active = false
+  resetGame()
+end
+
+local function drawTitleScreen()
+  local width = love.graphics.getWidth()
+  local height = love.graphics.getHeight()
+  local heading = titleState.step == "mode" and "Choisissez un mode" or "Choisissez une carte"
+  local entries = getTitleEntries()
+  local titleFont = resultFont or love.graphics.getFont()
+  local menuFont = hudFont or love.graphics.getFont()
+  local hintFont = resultPromptFont or love.graphics.getFont()
+  local previousFont = love.graphics.getFont()
+
+  love.graphics.clear(1, 1, 1, 1)
+
+  love.graphics.setFont(titleFont)
+  love.graphics.setColor(0, 0, 0, 1)
+  love.graphics.print(heading, (width - titleFont:getWidth(heading)) * 0.5, height * 0.28)
+
+  love.graphics.setFont(menuFont)
+  local lineHeight = menuFont:getHeight()
+  local rowHeight = lineHeight + math.floor((14 * uiScale) + 0.5)
+  local padding = math.floor((16 * uiScale) + 0.5)
+  local leftPadding = math.floor((28 * uiScale) + 0.5)
+  local rightPadding = math.floor((28 * uiScale) + 0.5)
+  local textWidth = 0
+  for _, entry in ipairs(entries) do
+    textWidth = math.max(textWidth, menuFont:getWidth(entry))
+  end
+  local menuWidth = textWidth + leftPadding + rightPadding + (padding * 2)
+  local menuHeight = (#entries * rowHeight) + (padding * 2)
+  local menuX = (width - menuWidth) * 0.5
+  local menuY = height * 0.62
+  local radius = math.max(12, math.floor((30 * uiScale) + 0.5))
+
+  love.graphics.setColor(1, 1, 1, 0.96)
+  love.graphics.rectangle("fill", menuX, menuY, menuWidth, menuHeight, radius, radius, 24)
+  love.graphics.setColor(0, 0, 0, 0.18)
+  love.graphics.rectangle("line", menuX, menuY, menuWidth, menuHeight, radius, radius, 24)
+
+  for i, entry in ipairs(entries) do
+    local y = menuY + padding + (i - 1) * rowHeight
+    if i == titleState.selectedIndex then
+      local entryRadius = math.floor(rowHeight * 0.5)
+      local insetX = math.floor((12 * uiScale) + 0.5)
+      love.graphics.setColor(0, 0, 0, 1)
+      love.graphics.rectangle("fill", menuX + insetX, y - math.floor((2 * uiScale) + 0.5), menuWidth - (insetX * 2), rowHeight, entryRadius, entryRadius, 24)
+      love.graphics.setColor(1, 1, 1, 1)
+    else
+      love.graphics.setColor(0, 0, 0, 1)
+    end
+    love.graphics.print(entry, menuX + leftPadding, y + math.floor((5 * uiScale) + 0.5))
+  end
+
+  love.graphics.setFont(hintFont)
+  local hint = titleState.step == "mode" and "Entrée pour continuer" or "Entrée pour lancer, Retour arrière pour revenir"
+  love.graphics.setColor(0.15, 0.15, 0.15, 1)
+  love.graphics.print(hint, (width - hintFont:getWidth(hint)) * 0.5, menuY + menuHeight + math.floor((22 * uiScale) + 0.5))
+
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setFont(previousFont)
 end
 
 local function logViewport(label)
@@ -142,7 +256,7 @@ local enemyArchetypes = {
 local enemySpawnCount = 6
 
 local function getEnemyArchetypesForTheme()
-  if not SWAMP then
+  if not Rules.SWAMP then
     return enemyArchetypes
   end
 
@@ -186,7 +300,7 @@ local function beginBattleResult(result)
   battleResultTimer = 0
 end
 
-local function resetGame()
+resetGame = function()
   love.graphics.setBackgroundColor(1, 1, 1)
   math.randomseed(os.time())
   battleResult = nil
@@ -213,7 +327,7 @@ local function resetGame()
   tileH = tile:getHeight()
   tileSpacingX = tileW * 0.75
   tileSpacingY = tileH
-  local activeEnemySpawnCount = PVP and playerSpawnCount or enemySpawnCount
+  local activeEnemySpawnCount = Rules.PVP and playerSpawnCount or enemySpawnCount
   local playerSpawnPositions = generateSpawnPositions(playerSpawnCount, 5, 10, 6, 14, 8, 10, "right", 2.6)
   local enemySpawnPositions = generateSpawnPositions(activeEnemySpawnCount, 11, 19, 3, 17, 15, 10, "left", 2.2)
   local obstaclePlacements = generateObstaclePlacements(playerSpawnPositions, enemySpawnPositions)
@@ -240,22 +354,9 @@ local function resetGame()
   characters = loadSprites(playerSpawnPositions, enemySpawnPositions)
   battle:setCharacters(characters)
 
+  ensureWindowInitialized()
   local screenW = love.graphics.getWidth()
   local screenH = love.graphics.getHeight()
-  if not windowInitialized then
-    if not isWeb then
-      screenW, screenH = love.window.getDesktopDimensions(1)
-      love.window.setMode(screenW, screenH, {
-        fullscreen = true,
-        fullscreentype = "desktop",
-        highdpi = true,
-      })
-      screenW = love.graphics.getWidth()
-      screenH = love.graphics.getHeight()
-    end
-    windowInitialized = true
-  end
-  rebuildUi(screenW, screenH)
   camera = Camera.new(screenW, screenH)
   camera:setViewSize(love.graphics.getWidth(), love.graphics.getHeight())
   camera:setBounds(
@@ -481,7 +582,7 @@ end
 loadSprites = function(playerSpawnPositions, enemySpawnPositions)
   local roster = {}
 
-  if PVP then
+  if Rules.PVP then
     local function addHeroTeam(spawnPositions, teamName)
       local classPool = shuffledCopy(availableClasses)
 
@@ -616,6 +717,16 @@ local function pulseRumble(low, high, duration)
 end
 
 local function handleDirectionalInput(direction)
+  if titleState.active then
+    local entries = getTitleEntries()
+    if direction == "up" then
+      titleState.selectedIndex = math.max(1, titleState.selectedIndex - 1)
+    elseif direction == "down" then
+      titleState.selectedIndex = math.min(#entries, titleState.selectedIndex + 1)
+    end
+    return
+  end
+
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
   if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
@@ -650,6 +761,17 @@ end
 local function handleConfirmInput()
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
+  if titleState.active then
+    if titleState.step == "mode" then
+      titleState.modeIndex = titleState.selectedIndex
+      titleState.step = "map"
+      titleState.selectedIndex = titleState.mapIndex
+    else
+      titleState.mapIndex = titleState.selectedIndex
+      startGameFromTitleSelection()
+    end
+    return
+  end
   if battleResult then
     resetGame()
     return
@@ -722,6 +844,14 @@ end
 local function handleCancelInput()
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
+  if titleState.active then
+    if titleState.step == "map" then
+      titleState.step = "mode"
+      titleState.selectedIndex = titleState.modeIndex
+    end
+    return
+  end
+
   if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
@@ -816,6 +946,10 @@ function love.update(dt)
     end
   end
 
+  if titleState.active then
+    return
+  end
+
   if battle then
     battle:update(updateDt)
     local screenShake = battle:consumeScreenShake()
@@ -835,7 +969,7 @@ function love.update(dt)
     Menu:setPhase(battle:getTurnPhase())
   end
 
-  if PVP then
+  if Rules.PVP then
     local winningTeam = getWinningTeam()
     if winningTeam then
       beginBattleResult(winningTeam)
@@ -863,7 +997,7 @@ function love.update(dt)
     and not battle:hasActionSpent()
   )
   Menu:setCanGrapple(active and battle and battle:getTurnPhase() == "action" and battle:isGrappler(active))
-  if not PVP and active and battle and active.team == "enemy" and not battle:isAnimating() then
+  if not Rules.PVP and active and battle and active.team == "enemy" and not battle:isAnimating() then
     if battle:getTurnPhase() == "move" then
       if not enemyTurnState or enemyTurnState.character ~= active or enemyTurnState.phase ~= "move_preview" then
         local targetColumn, targetRow = battle:getBestMoveTileFor(active)
@@ -939,7 +1073,7 @@ function love.update(dt)
         end
       end
     end
-  elseif enemyTurnState and (PVP or not active or active.team ~= "enemy") then
+  elseif enemyTurnState and (Rules.PVP or not active or active.team ~= "enemy") then
     enemyTurnState = nil
   end
 
@@ -1014,6 +1148,18 @@ function love.resize(width, height)
 end
 
 function love.draw()
+  if titleState.active then
+    drawTitleScreen()
+    if introFadeAlpha > 0 then
+      local width = love.graphics.getWidth()
+      local height = love.graphics.getHeight()
+      love.graphics.setColor(1, 1, 1, introFadeAlpha)
+      love.graphics.rectangle("fill", 0, 0, width, height)
+      love.graphics.setColor(1, 1, 1, 1)
+    end
+    return
+  end
+
   local active = getActiveCharacter()
   local hoveredCharacter = nil
   local attackAnimation = battle and battle:getAttackAnimation() or nil
@@ -1187,14 +1333,14 @@ function love.draw()
 
   if active then
     local hudText = string.format(
-      PVP and "Tour %d: %s  %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
+      Rules.PVP and "Tour %d: %s  %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s" or "Tour %d: %s  HP:%d  MOV:%d  DEF:%d  ATK:%d  Phase: %s",
       currentTurn,
-      PVP and Character.getTeamDisplayName(active.team) or active.displayClassName or active.className or "Inconnu",
-      PVP and (active.displayClassName or active.className or "Inconnu") or active.hp,
-      PVP and active.hp or active.mov,
-      PVP and active.mov or active.def,
-      PVP and active.def or active.atk,
-      PVP and active.atk or (battle and battle:getTurnPhase() or "move"),
+      Rules.PVP and Character.getTeamDisplayName(active.team) or active.displayClassName or active.className or "Inconnu",
+      Rules.PVP and (active.displayClassName or active.className or "Inconnu") or active.hp,
+      Rules.PVP and active.hp or active.mov,
+      Rules.PVP and active.mov or active.def,
+      Rules.PVP and active.def or active.atk,
+      Rules.PVP and active.atk or (battle and battle:getTurnPhase() or "move"),
       battle and battle:getTurnPhase() or "move"
     )
     local font = love.graphics.getFont()
@@ -1302,6 +1448,17 @@ function love.keypressed(key)
     return
   elseif key == "backspace" then
     handleCancelInput()
+    return
+  end
+
+  if titleState.active then
+    if key == "up" or key == "down" then
+      handleDirectionalInput(key)
+    elseif key == "1" then
+      titleState.selectedIndex = 1
+    elseif key == "2" then
+      titleState.selectedIndex = 2
+    end
     return
   end
 
