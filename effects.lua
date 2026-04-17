@@ -196,9 +196,11 @@ local function drawTerrainTile(image, column, row, createdAt, gridToScreen, tile
   love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, characterScale, rightOffsetX, footOffsetY)
+function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, characterScale, rightOffsetX, footOffsetY, layer)
   local attackAnimation = battle and battle:getAttackAnimation() or nil
-  if attackAnimation and attackAnimation.kind == "splash" and self.splashTile then
+  local drawGround = layer == nil or layer == "ground"
+  local drawOverlay = layer == nil or layer == "overlay"
+  if drawOverlay and attackAnimation and attackAnimation.kind == "splash" and self.splashTile then
     local splashX, splashY = gridToScreen(attackAnimation.centerColumn, attackAnimation.centerRow)
     local splashRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
     local splashScale = 0.6 + (0.4 * splashRatio)
@@ -215,7 +217,7 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, char
       self.splashTile:getHeight() * 0.5
     )
     love.graphics.setColor(1, 1, 1, 1)
-  elseif attackAnimation and attackAnimation.kind == "cold" and self.coldTile then
+  elseif drawOverlay and attackAnimation and attackAnimation.kind == "cold" and self.coldTile then
     local target = attackAnimation.target
     local coldX, coldY = gridToScreen(target.column, target.row)
     local coldRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
@@ -241,13 +243,13 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, char
       self.coldTile:getHeight() * 0.5
     )
     love.graphics.setColor(1, 1, 1, 1)
-  elseif attackAnimation and attackAnimation.kind == "poison" and self.poisonTile then
+  elseif drawOverlay and attackAnimation and attackAnimation.kind == "poison" and self.poisonTile then
     local poisonX, poisonY = gridToScreen(attackAnimation.target.column, attackAnimation.target.row)
     local centerX = poisonX + (tileW * 0.5)
     local centerY = poisonY + (tileH * 0.5)
-    local spawnInterval = 0.045
-    local fallDuration = 0.24
-    local impactHold = 0.08
+    local spawnInterval = 0.085
+    local fallDuration = 0.42
+    local impactHold = 0.12
     for index = 1, 12 do
       local delay = (index - 1) * spawnInterval
       local localTimer = attackAnimation.timer - delay
@@ -283,7 +285,7 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, char
     love.graphics.setColor(1, 1, 1, 1)
   end
 
-  if self.thornsTile then
+  if drawGround and self.thornsTile then
     for thornKey, entry in pairs(self.thorns) do
       local commaIndex = thornKey:find(",")
       local column = tonumber(thornKey:sub(1, commaIndex - 1))
@@ -306,7 +308,7 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, char
     end
   end
 
-  if self.algaeTile then
+  if drawGround and self.algaeTile then
     for algaeKey, entry in pairs(self.algae) do
       local commaIndex = algaeKey:find(",")
       local column = tonumber(algaeKey:sub(1, commaIndex - 1))
@@ -329,7 +331,7 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, char
     end
   end
 
-  if self.healAnimation and self.healHeartTile then
+  if drawOverlay and self.healAnimation and self.healHeartTile then
     local targetX, targetY = gridToScreen(self.healAnimation.target.column, self.healAnimation.target.row)
     local baseX = targetX + (tileW * 0.5)
     local baseY = targetY + (tileH * 0.18)
