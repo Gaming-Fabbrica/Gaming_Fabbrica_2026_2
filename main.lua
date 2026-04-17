@@ -415,6 +415,7 @@ resetGame = function()
   provokedIcon = love.graphics.newImage("assets/sprites/effects/provoked.png")
   effects = Effects.new()
   effects:load()
+  effects:setTurnNumber(1)
   lifebar = Lifebar.new("assets/sprites/items/heart.png")
   tileW = tile:getWidth()
   tileH = tile:getHeight()
@@ -780,6 +781,9 @@ local function advanceTurn(activeCharacter)
     end
   end
 
+  if effects then
+    effects:advanceTurn()
+  end
   if battle then
     battle:startTurn(characters[currentTurn])
   end

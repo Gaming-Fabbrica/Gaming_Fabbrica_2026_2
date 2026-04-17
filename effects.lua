@@ -7,6 +7,8 @@ function Effects.new()
     algae = {},
     damagePopups = {},
     healAnimation = nil,
+    turnNumber = 1,
+    terrainEffectLifetimeTurns = 10,
     thornsTile = nil,
     algaeTile = nil,
     splashTile = nil,
@@ -36,6 +38,30 @@ end
 function Effects:clearHealAnimation()
   self.healAnimation = nil
 end
+function Effects:setTurnNumber(turnNumber)
+  self.turnNumber = math.max(1, tonumber(turnNumber) or 1)
+  self:expireTerrainEffects()
+end
+
+function Effects:advanceTurn()
+  self.turnNumber = self.turnNumber + 1
+  self:expireTerrainEffects()
+end
+
+function Effects:expireTerrainEffects()
+  local minCreatedTurn = self.turnNumber - self.terrainEffectLifetimeTurns
+  for key, entry in pairs(self.thorns) do
+    if type(entry) == "table" and (entry.turnNumber or 1) < minCreatedTurn then
+      self.thorns[key] = nil
+    end
+  end
+  for key, entry in pairs(self.algae) do
+    if type(entry) == "table" and (entry.turnNumber or 1) < minCreatedTurn then
+      self.algae[key] = nil
+    end
+  end
+end
+
 
 function Effects:hasThornsAt(column, row)
   return self.thorns[column .. "," .. row] ~= nil
@@ -46,12 +72,18 @@ function Effects:hasAlgaeAt(column, row)
 end
 
 function Effects:addThorns(column, row)
-  self.thorns[column .. "," .. row] = love.timer.getTime()
+  self.thorns[column .. "," .. row] = {
+    createdAt = love.timer.getTime(),
+    turnNumber = self.turnNumber,
+  }
   print(string.format("[thorns] add at %d,%d", column, row))
 end
 
 function Effects:addAlgae(column, row)
-  self.algae[column .. "," .. row] = love.timer.getTime()
+  self.algae[column .. "," .. row] = {
+    createdAt = love.timer.getTime(),
+    turnNumber = self.turnNumber,
+  }
 end
 
 function Effects:addDamagePopup(column, row, damage)
@@ -177,11 +209,12 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
   end
 
   if self.thornsTile then
-    for thornKey, createdAt in pairs(self.thorns) do
+    for thornKey, entry in pairs(self.thorns) do
       local commaIndex = thornKey:find(",")
       local column = tonumber(thornKey:sub(1, commaIndex - 1))
       local row = tonumber(thornKey:sub(commaIndex + 1))
-      if column and row then
+      local createdAt = type(entry) == "table" and entry.createdAt or entry
+      if column and row and createdAt then
         drawTerrainTile(
           self.thornsTile,
           column,
@@ -199,11 +232,12 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
   end
 
   if self.algaeTile then
-    for algaeKey, createdAt in pairs(self.algae) do
+    for algaeKey, entry in pairs(self.algae) do
       local commaIndex = algaeKey:find(",")
       local column = tonumber(algaeKey:sub(1, commaIndex - 1))
       local row = tonumber(algaeKey:sub(commaIndex + 1))
-      if column and row then
+      local createdAt = type(entry) == "table" and entry.createdAt or entry
+      if column and row and createdAt then
         drawTerrainTile(
           self.algaeTile,
           column,
