@@ -30,6 +30,7 @@ local battle = nil
 local effects = nil
 local lifebar = nil
 local enemyTurnState = nil
+local pendingAdvanceTurn = nil
 local mapBackgroundScale = 2.5
 local hudFont = nil
 local resultFont = nil
@@ -63,6 +64,7 @@ local function isHumanControlledCharacter(character)
 end
 
 local enemyMovePreviewDelay = 0.9
+local turnAdvanceDelay = 0.5
 local enemyPostMoveDelay = 0.45
 local enemyAttackPreviewDelay = 0.55
 local enemySkipActionDelay = 0.3
@@ -307,6 +309,7 @@ resetGame = function()
   battleResultTimer = 0
   introFadeAlpha = 1
   enemyTurnState = nil
+  pendingAdvanceTurn = nil
   currentTurn = 1
   slowMotionTimer = 0
   slowMotionScale = 1
@@ -689,6 +692,7 @@ local function advanceTurn(activeCharacter)
     battle:startTurn(characters[currentTurn])
   end
   enemyTurnState = nil
+  pendingAdvanceTurn = nil
   Menu:reset()
 end
 
@@ -729,7 +733,7 @@ local function handleDirectionalInput(direction)
 
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
-  if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
+  if pendingAdvanceTurn or battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -782,7 +786,7 @@ local function handleConfirmInput()
     resetGame()
     return
   end
-  if not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
+  if pendingAdvanceTurn or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -866,7 +870,7 @@ local function handleCancelInput()
     return
   end
 
-  if battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
+  if pendingAdvanceTurn or battleResult or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
     return
   end
 
@@ -948,6 +952,17 @@ function love.update(dt)
     return
   end
 
+  if pendingAdvanceTurn then
+    pendingAdvanceTurn.timer = math.max(0, pendingAdvanceTurn.timer - dt)
+    if pendingAdvanceTurn.timer <= 0 then
+      local completedActionCharacter = pendingAdvanceTurn.character
+      pendingAdvanceTurn = nil
+      advanceTurn(completedActionCharacter)
+    else
+      return
+    end
+  end
+
   local gamepadDirection = readGamepadDirection()
   if gamepadDirection ~= gamepadHeldDirection then
     gamepadHeldDirection = gamepadDirection
@@ -982,7 +997,10 @@ function love.update(dt)
     end
     local completedActionCharacter = battle:consumeCompletedActionCharacter()
     if completedActionCharacter then
-      advanceTurn(completedActionCharacter)
+      pendingAdvanceTurn = {
+        character = completedActionCharacter,
+        timer = turnAdvanceDelay,
+      }
     end
     Menu:setPhase(battle:getTurnPhase())
   end
@@ -1346,7 +1364,7 @@ function love.draw()
   end
 
   local isAnimating = battle and battle:isAnimating()
-  if active and isHumanControlledCharacter(active) and not isAnimating and (not battle or battle:getMode() == "menu") then
+  if not pendingAdvanceTurn and active and isHumanControlledCharacter(active) and not isAnimating and (not battle or battle:getMode() == "menu") then
     local tileX, tileY = gridToScreen(active.column, active.row)
     local worldX = tileX + (tileW * 0.5)
     local worldY = tileY + (tileH * 0.5)
@@ -1493,7 +1511,7 @@ function love.keypressed(key)
 
   local active = getActiveCharacter()
   local gameMode = battle and battle:getMode() or "menu"
-  if battleResult then
+  if pendingAdvanceTurn or battleResult then
     return
   elseif active and not isHumanControlledCharacter(active) then
     -- disable player input during AI turns

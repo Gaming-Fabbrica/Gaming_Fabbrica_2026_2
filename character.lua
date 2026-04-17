@@ -4,7 +4,7 @@ Character.__index = Character
 
 Character.frenchClassNames = {
   archer = "Archer",
--- javelinier = "Javelinier",
+-- javelineer = "Javelineer",
   atk_mov = "Maraudeur",
   counter = "Lancier",
   free = "Rôdeur",
