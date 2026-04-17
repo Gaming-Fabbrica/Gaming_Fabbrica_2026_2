@@ -839,7 +839,7 @@ function Battle:getAttackableTiles(activeCharacter)
 end
 
 function Battle:isSplashAttacker(character)
-  return character and character.team == "enemy" and (character.className == "affame" or character.className == "affamé")
+  return character and character.team == "enemy" and character.className == "embourbe"
 end
 
 function Battle:getSplashAreaTiles(centerColumn, centerRow)
@@ -1673,11 +1673,17 @@ function Battle:applyCriticalPush(attacker, defender)
   return true
 end
 
+function Battle:isKickAttacker(character)
+  return character and character.team == "enemy" and (character.className == "affame" or character.className == "affamé")
+end
+
 function Battle:calculateDamage(attacker, defender)
   local critical = attacker and self:isHeroCharacter(attacker) and love.math.random(6) == 1
   local damage = nil
   if attacker and attacker.className == "javelineer" then
     damage = 2
+  elseif self:isKickAttacker(attacker) then
+    damage = math.max(1, attacker.atk - defender.def)
   elseif self:isBackAttack(attacker, defender) then
     damage = math.max(1, attacker.atk)
   else
@@ -2070,6 +2076,8 @@ function Battle:update(dt)
           animation.defeatedTargets[#animation.defeatedTargets + 1] = animation.target
         else
           if animation.critical then
+            self:applyCriticalPush(animation.attacker, animation.target)
+          elseif self:isKickAttacker(animation.attacker) then
             self:applyCriticalPush(animation.attacker, animation.target)
           end
           if not animation.counterApplied and self:canCounterAttack(animation.attacker, animation.target) then
