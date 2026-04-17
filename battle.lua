@@ -1477,6 +1477,30 @@ function Battle:getBestGrappleDestination(activeCharacter, target)
   return bestColumn, bestRow
 end
 
+function Battle:getAttackPlanningRange(character)
+  if self:isSplashAttacker(character) then
+    return character.attackRange or 2
+  end
+  return character and (character.attackRange or 1) or 1
+end
+
+function Battle:canDefenderCounterAtDistance(attacker, defender, distance)
+  if not attacker or not defender or distance == nil then
+    return false
+  end
+
+  if defender.className == "counter" and distance == 1 then
+    return true
+  end
+
+  if not self:isHeroCharacter(defender) and defender.team == "enemy" and attacker.team == "player" then
+    local counterRange = defender.attackRange or 1
+    return distance <= counterRange
+  end
+
+  return false
+end
+
 function Battle:confirmGrapple(activeCharacter)
   if not self:isGrappleable(self.grappleTarget.column, self.grappleTarget.row) then
     self:logGrapple(string.format(
@@ -1542,32 +1566,60 @@ end
 function Battle:getBestMoveTileFor(activeCharacter)
   local bestColumn = activeCharacter.column
   local bestRow = activeCharacter.row
-  local bestScore = nil
+  local bestAttackRank = nil
+  local bestGap = nil
+  local bestPreferredDistance = nil
   local bestTargetDistance = nil
   local reachable = self:getReachableTiles(activeCharacter.column, activeCharacter.row, activeCharacter.mov, activeCharacter)
   local opponents = self:getOpponentsOf(activeCharacter)
+  local planningRange = self:getAttackPlanningRange(activeCharacter)
+  local desiredDistance = planningRange > 1 and planningRange or 1
 
   local function evaluateTile(column, row)
-    local targetDistance = nil
+    local tileAttackRank = nil
+    local tileGap = nil
+    local tilePreferredDistance = nil
+    local tileTargetDistance = nil
+
     for _, opponent in ipairs(opponents) do
       local distance = self:getTileDistance(column, row, opponent.column, opponent.row)
-      if distance and (targetDistance == nil or distance < targetDistance) then
-        targetDistance = distance
+      if distance then
+        local canAttack = distance <= planningRange
+        local counterRisk = canAttack and self:canDefenderCounterAtDistance(activeCharacter, opponent, distance)
+        local attackRank = canAttack and (counterRisk and 1 or 0) or 2
+        local gap = canAttack and 0 or (distance - planningRange)
+        local preferredDistance = canAttack and math.abs(distance - desiredDistance) or distance
+
+        if
+          tileAttackRank == nil
+          or attackRank < tileAttackRank
+          or (attackRank == tileAttackRank and gap < tileGap)
+          or (attackRank == tileAttackRank and gap == tileGap and preferredDistance < tilePreferredDistance)
+          or (attackRank == tileAttackRank and gap == tileGap and preferredDistance == tilePreferredDistance and distance < tileTargetDistance)
+        then
+          tileAttackRank = attackRank
+          tileGap = gap
+          tilePreferredDistance = preferredDistance
+          tileTargetDistance = distance
+        end
       end
     end
 
-    if not targetDistance then
+    if tileAttackRank == nil then
       return
     end
 
-    local score = math.max(0, targetDistance - (activeCharacter.attackRange or 1))
     if
-      bestScore == nil
-      or score < bestScore
-      or (score == bestScore and targetDistance < bestTargetDistance)
+      bestAttackRank == nil
+      or tileAttackRank < bestAttackRank
+      or (tileAttackRank == bestAttackRank and tileGap < bestGap)
+      or (tileAttackRank == bestAttackRank and tileGap == bestGap and tilePreferredDistance < bestPreferredDistance)
+      or (tileAttackRank == bestAttackRank and tileGap == bestGap and tilePreferredDistance == bestPreferredDistance and tileTargetDistance < bestTargetDistance)
     then
-      bestScore = score
-      bestTargetDistance = targetDistance
+      bestAttackRank = tileAttackRank
+      bestGap = tileGap
+      bestPreferredDistance = tilePreferredDistance
+      bestTargetDistance = tileTargetDistance
       bestColumn = column
       bestRow = row
     end
