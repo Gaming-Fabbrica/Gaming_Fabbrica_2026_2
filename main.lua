@@ -51,6 +51,41 @@ local windowInitialized = false
 local generateSpawnPositions = nil
 local generateObstaclePlacements = nil
 local loadSprites = nil
+local gridToScreen = nil
+
+local function parseLaunchOptions(argv)
+  local options = {
+    exportMap = false,
+    exportPath = "full_map_hexagons.png",
+  }
+
+  if type(argv) ~= "table" then
+    return options
+  end
+
+  local index = 1
+  while index <= #argv do
+    local value = argv[index]
+    if value == "--export-map" then
+      options.exportMap = true
+      if argv[index + 1] and argv[index + 1]:sub(1, 2) ~= "--" then
+        options.exportPath = argv[index + 1]
+        index = index + 1
+      end
+    else
+      local inlinePath = value:match("^%-%-export%-map=(.+)$")
+      if inlinePath then
+        options.exportMap = true
+        options.exportPath = inlinePath
+      end
+    end
+    index = index + 1
+  end
+
+  return options
+end
+
+local launchOptions = parseLaunchOptions(rawget(_G, "arg"))
 
 local function isHumanControlledCharacter(character)
   return character ~= nil and (PVP or character.team == "player")
@@ -242,7 +277,7 @@ local function resetGame()
 
   local screenW = love.graphics.getWidth()
   local screenH = love.graphics.getHeight()
-  if not windowInitialized then
+  if not windowInitialized and not launchOptions.exportMap then
     if not isWeb then
       screenW, screenH = love.window.getDesktopDimensions(1)
       love.window.setMode(screenW, screenH, {
@@ -419,6 +454,15 @@ end
 generateObstaclePlacements = function(playerSpawnPositions, enemySpawnPositions)
   local placements = {}
   local occupiedLookup = buildReservedLookup(playerSpawnPositions, enemySpawnPositions)
+  local exportBushCount = launchOptions.exportMap and 0 or bushCount
+  local exportCentralTreeCount = launchOptions.exportMap and 12 or 0
+  local exportCentralStoneCount = launchOptions.exportMap and 8 or 0
+  local centerColumn = (cols + 1) * 0.5
+  local centerRow = (rows + 1) * 0.5
+  local centralColumnStart = math.max(1, math.floor(cols * 0.25))
+  local centralColumnEnd = math.min(cols, math.ceil(cols * 0.75))
+  local centralRowStart = math.max(1, math.floor(rows * 0.25))
+  local centralRowEnd = math.min(rows, math.ceil(rows * 0.75))
 
   local treeCandidates = buildCandidates(1, cols, 1, rows, occupiedLookup, function(column, row)
     local edgeDistance = math.min(column - 1, cols - column, row - 1, rows - row)
@@ -444,7 +488,7 @@ generateObstaclePlacements = function(playerSpawnPositions, enemySpawnPositions)
     return 1 + (nearbyTrees * 4)
   end)
 
-  for _ = 1, bushCount do
+  for _ = 1, exportBushCount do
     local candidate = takeWeightedCandidate(bushCandidates)
     if not candidate then
       break
@@ -475,7 +519,115 @@ generateObstaclePlacements = function(playerSpawnPositions, enemySpawnPositions)
     }
   end
 
+  local centralTreeCandidates = buildCandidates(
+    centralColumnStart,
+    centralColumnEnd,
+    centralRowStart,
+    centralRowEnd,
+    occupiedLookup,
+    function(column, row)
+      local distanceToCenter = tileDistance(column, row, centerColumn, centerRow)
+      local nearbyTrees = countNearbyTiles(placements, column, row, 2.4)
+      return math.max(0.1, 7 - distanceToCenter) + (nearbyTrees * 1.6)
+    end
+  )
+
+  for _ = 1, exportCentralTreeCount do
+    local candidate = takeWeightedCandidate(centralTreeCandidates)
+    if not candidate then
+      break
+    end
+    occupiedLookup[tileKey(candidate.column, candidate.row)] = true
+    placements[#placements + 1] = {
+      kind = "tree",
+      column = candidate.column,
+      row = candidate.row,
+    }
+  end
+
+  local centralStoneCandidates = buildCandidates(
+    centralColumnStart,
+    centralColumnEnd,
+    centralRowStart,
+    centralRowEnd,
+    occupiedLookup,
+    function(column, row)
+      local distanceToCenter = tileDistance(column, row, centerColumn, centerRow)
+      local nearbyTrees = countNearbyTiles(placements, column, row, 1.8)
+      return math.max(0.1, 6 - distanceToCenter) + nearbyTrees
+    end
+  )
+
+  for _ = 1, exportCentralStoneCount do
+    local candidate = takeWeightedCandidate(centralStoneCandidates)
+    if not candidate then
+      break
+    end
+    occupiedLookup[tileKey(candidate.column, candidate.row)] = true
+    placements[#placements + 1] = {
+      kind = "stone",
+      column = candidate.column,
+      row = candidate.row,
+    }
+  end
+
   return placements
+end
+
+local function writeBinaryFile(path, contents)
+  local handle, err = io.open(path, "wb")
+  if not handle then
+    return false, err
+  end
+
+  handle:write(contents)
+  handle:close()
+  return true
+end
+
+local function exportPrintableMap(path)
+  local width = math.ceil(mapBackground:getWidth() * mapBackgroundScale)
+  local height = math.ceil(mapBackground:getHeight() * mapBackgroundScale)
+  local canvas = love.graphics.newCanvas(width, height)
+
+  love.graphics.setCanvas(canvas)
+  love.graphics.clear(1, 1, 1, 1)
+  love.graphics.push()
+  love.graphics.origin()
+
+  love.graphics.draw(mapBackground, 0, 0, 0, mapBackgroundScale, mapBackgroundScale)
+
+  for column = 1, cols do
+    for row = 1, rows do
+      local x, y = gridToScreen(column, row)
+      love.graphics.draw(tile, x, y)
+    end
+  end
+
+  local obstacleDrawList = Obstacle.buildDrawList(obstacles, gridToScreen, tileW, tileH)
+  table.sort(obstacleDrawList, function(a, b)
+    if a.sortY == b.sortY then
+      return a.sortX < b.sortX
+    end
+    return a.sortY < b.sortY
+  end)
+
+  for _, entry in ipairs(obstacleDrawList) do
+    if entry.obstacle.kind == "tree" or entry.obstacle.kind == "stone" then
+      Obstacle.drawEntry(entry, tileW, tileH, 0)
+    end
+  end
+
+  love.graphics.pop()
+  love.graphics.setCanvas()
+
+  local encoded = canvas:newImageData():encode("png")
+  local ok, err = writeBinaryFile(path, encoded:getString())
+  canvas:release()
+
+  if not ok then
+    error("Failed to export map PNG: " .. tostring(err))
+  end
 end
 
 loadSprites = function(playerSpawnPositions, enemySpawnPositions)
@@ -543,7 +695,7 @@ loadSprites = function(playerSpawnPositions, enemySpawnPositions)
   return roster
 end
 
-local function gridToScreen(column, row)
+gridToScreen = function(column, row)
   local x = (column - 1) * tileSpacingX
   local y = (row - 1) * tileSpacingY
   if column % 2 == 1 then
@@ -767,6 +919,11 @@ function love.load()
   isWeb = love.system.getOS() == "Web"
   allowGamepadRumble = not isWeb
   resetGame()
+  if launchOptions.exportMap then
+    exportPrintableMap(launchOptions.exportPath)
+    love.event.quit(0)
+    return
+  end
   logViewport("load")
 end
 
