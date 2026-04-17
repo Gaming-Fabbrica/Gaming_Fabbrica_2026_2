@@ -6,6 +6,7 @@ local Lifebar = require("lifebar")
 local Obstacle = require("obstacle")
 local Effects = require("effects")
 local Rules = require("rules")
+local MapTheme = require("map_theme")
 
 local cols = 20
 local rows = 20
@@ -199,8 +200,7 @@ local function resetGame()
   obstacles = {}
   characters = {}
 
-  local mapBackgroundPath = SWAMP and "assets/swamp_map_bg.png" or "assets/map_bg2.png"
-  mapBackground = love.graphics.newImage(mapBackgroundPath)
+  mapBackground = love.graphics.newImage(MapTheme.getBackgroundPath())
   tile = love.graphics.newImage("assets/sprites/hexa.png")
   cursor = love.graphics.newImage("assets/sprites/cursor.png")
   moveTile = love.graphics.newImage("assets/sprites/move.png")
