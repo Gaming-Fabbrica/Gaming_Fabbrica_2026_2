@@ -880,7 +880,11 @@ local function handleConfirmInput()
     return
   end
   if battleResult then
-    resetGame()
+    if battleResult == "game_over" then
+      openTitleScreen()
+    else
+      resetGame()
+    end
     return
   end
   if pendingAdvanceTurn or not active or not isHumanControlledCharacter(active) or (battle and battle:isAnimating()) then
@@ -1046,6 +1050,9 @@ function love.update(dt)
 
   if battleResult then
     battleResultTimer = math.min(battleResultDuration, battleResultTimer + dt)
+    if battleResult == "game_over" and battleResultTimer >= battleResultDuration then
+      openTitleScreen()
+    end
     return
   end
 
@@ -1589,7 +1596,7 @@ function love.draw()
       love.graphics.print(message, textX, textY)
     end
 
-    local prompt = "Appuyez sur Entree pour recommencer"
+    local prompt = battleResult == "game_over" and "Retour au titre..." or "Appuyez sur Entree pour recommencer"
     if resultPromptFont then
       love.graphics.setFont(resultPromptFont)
     end

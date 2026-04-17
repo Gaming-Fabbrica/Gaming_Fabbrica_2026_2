@@ -2024,11 +2024,12 @@ function Battle:update(dt)
 
       local fromNode = animation.path[animation.step]
       local toNode = animation.path[animation.step + 1]
+      local previousNode = animation.path[animation.step - 1]
       if fromNode and toNode then
         self:updateCharacterDirection(animation.character, fromNode.column, toNode.column)
       end
       if self:shouldLeaveThorns(animation.character) and fromNode then
-        self:addThornArc(animation.character, fromNode.column, fromNode.row, toNode and toNode.column or nil, toNode and toNode.row or nil)
+        self:addThornArc(animation.character, fromNode.column, fromNode.row, previousNode and previousNode.column or nil, previousNode and previousNode.row or nil)
       end
       if self:shouldLeaveAlgae(animation.character) and fromNode then
         self:addAlgae(fromNode.column, fromNode.row)
