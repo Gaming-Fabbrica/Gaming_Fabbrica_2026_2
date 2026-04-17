@@ -1431,7 +1431,7 @@ function love.draw()
   end
 
   if effects and battle then
-    effects:drawWorld(battle, gridToScreen, tileW, tileH, love.timer.getTime())
+    effects:drawWorld(battle, gridToScreen, tileW, tileH, love.timer.getTime(), characterScale, characterRightOffsetX, characterFootOffsetY)
   end
 
   if active and isHumanControlledCharacter(active) and not (battle and battle:isAnimating()) then

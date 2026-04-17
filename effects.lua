@@ -196,7 +196,7 @@ local function drawTerrainTile(image, column, row, createdAt, gridToScreen, tile
   love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
+function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds, characterScale, rightOffsetX, footOffsetY)
   local attackAnimation = battle and battle:getAttackAnimation() or nil
   if attackAnimation and attackAnimation.kind == "splash" and self.splashTile then
     local splashX, splashY = gridToScreen(attackAnimation.centerColumn, attackAnimation.centerRow)
@@ -216,15 +216,24 @@ function Effects:drawWorld(battle, gridToScreen, tileW, tileH, timeSeconds)
     )
     love.graphics.setColor(1, 1, 1, 1)
   elseif attackAnimation and attackAnimation.kind == "cold" and self.coldTile then
-    local coldX, coldY = gridToScreen(attackAnimation.target.column, attackAnimation.target.row)
+    local target = attackAnimation.target
+    local coldX, coldY = gridToScreen(target.column, target.row)
     local coldRatio = math.min(1, attackAnimation.timer / (battle.attackWindupDuration + battle.attackLungeDuration))
-    local coldScale = 0.45 + (0.75 * coldRatio)
-    local coldAlpha = math.min(1, 0.2 + (0.75 * coldRatio))
+    local sprite = target and target.sprite or nil
+    local spriteCenterX = coldX + (tileW * 0.5) + (rightOffsetX or 0)
+    local spriteCenterY = coldY + (tileH * 0.5)
+    if sprite then
+      local spriteScale = math.min((tileW / sprite:getWidth()), (tileH / sprite:getHeight())) * (characterScale or 1.1)
+      local spriteBottomY = coldY + (tileH * 0.5) + (footOffsetY or 0)
+      spriteCenterY = spriteBottomY - ((sprite:getHeight() * spriteScale) * 0.52)
+    end
+    local coldScale = 0.95 + (1.05 * coldRatio)
+    local coldAlpha = math.min(1, 0.25 + (0.75 * coldRatio))
     love.graphics.setColor(0.92, 0.98, 1, coldAlpha)
     love.graphics.draw(
       self.coldTile,
-      coldX + (tileW * 0.5),
-      coldY + (tileH * 0.5),
+      spriteCenterX,
+      spriteCenterY,
       0,
       (tileW / self.coldTile:getWidth()) * coldScale,
       (tileH / self.coldTile:getHeight()) * coldScale,
