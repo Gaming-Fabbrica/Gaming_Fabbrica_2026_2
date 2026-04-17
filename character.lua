@@ -260,6 +260,10 @@ function Character.getAtTile(characters, column, row)
   return nil
 end
 
+function Character.isTraumaClass(className)
+  return className == "trauma" or className == "trauma2" or className == "trauma3"
+end
+
 function Character.getMoveRenderState(character, battle, gridToScreen)
   if not battle then
     return nil
@@ -279,6 +283,44 @@ function Character.getMoveRenderState(character, battle, gridToScreen)
   local ratio = math.min(1, animation.timer / battle.moveStepDuration)
   local fromX, fromY = gridToScreen(fromNode.column, fromNode.row)
   local toX, toY = gridToScreen(toNode.column, toNode.row)
+
+  if Character.isTraumaClass(character.className) then
+    local startNode = animation.path[1]
+    local endNode = animation.path[#animation.path]
+    if not startNode or not endNode then
+      return nil
+    end
+
+    local startX, startY = gridToScreen(startNode.column, startNode.row)
+    local endX, endY = gridToScreen(endNode.column, endNode.row)
+    local pathDuration = math.max(battle.moveStepDuration, (#animation.path - 1) * battle.moveStepDuration)
+    local elapsed = ((animation.step - 1) * battle.moveStepDuration) + animation.timer
+    local pathRatio = math.min(1, elapsed / pathDuration)
+    local x = startX
+    local y = startY
+    local scaleXFactor = 1
+    local scaleYFactor = 1
+    local alpha = 1
+
+    if pathRatio < 0.5 then
+      local phaseRatio = pathRatio / 0.5
+      x = startX
+      y = startY
+      scaleXFactor = 1 + (0.18 * phaseRatio)
+      scaleYFactor = 1 - (0.82 * phaseRatio)
+      alpha = 1 - (0.9 * phaseRatio)
+    else
+      local phaseRatio = (pathRatio - 0.5) / 0.5
+      x = endX
+      y = endY
+      scaleXFactor = 1.18 - (0.18 * phaseRatio)
+      scaleYFactor = 0.18 + (0.82 * phaseRatio)
+      alpha = 0.1 + (0.9 * phaseRatio)
+    end
+
+    return x, y, 0, scaleXFactor, scaleYFactor, alpha
+  end
+
   local x = fromX + (toX - fromX) * ratio
   local y = fromY + (toY - fromY) * ratio
   local jump = math.sin(math.pi * ratio) * battle.jumpHeight
@@ -415,9 +457,9 @@ function Character.getAnimatedRenderState(character, battle, gridToScreen, tileW
     return x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha
   end
 
-  x, y, jumpOffset, scaleXFactor, scaleYFactor = Character.getMoveRenderState(character, battle, gridToScreen)
+  x, y, jumpOffset, scaleXFactor, scaleYFactor, alpha = Character.getMoveRenderState(character, battle, gridToScreen)
   if x then
-    return x, y, jumpOffset, scaleXFactor or 1, scaleYFactor or 1, 1
+    return x, y, jumpOffset, scaleXFactor or 1, scaleYFactor or 1, alpha or 1
   end
 
   x, y, jumpOffset = Character.getAttackRenderState(character, battle, gridToScreen, tileW)
