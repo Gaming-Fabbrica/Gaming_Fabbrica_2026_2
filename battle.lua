@@ -398,6 +398,10 @@ function Battle:getGrappleAnimation()
   return self.grappleAnimation
 end
 
+function Battle:getMoveAnimation()
+  return self.moveAnimation
+end
+
 function Battle:getTankRange()
   return self.tankRange
 end

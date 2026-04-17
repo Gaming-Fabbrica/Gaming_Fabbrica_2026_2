@@ -1124,7 +1124,9 @@ function love.update(dt)
 
     local tileX, tileY = gridToScreen(focusColumn, focusRow)
     if gameMode == "animating" then
-      local animatedX, animatedY = Character.getMoveRenderState(active, battle, gridToScreen)
+      local moveAnimation = battle and battle:getMoveAnimation() or nil
+      local movingCharacter = moveAnimation and moveAnimation.character or active
+      local animatedX, animatedY = Character.getMoveRenderState(movingCharacter, battle, gridToScreen)
       if animatedX then
         tileX = animatedX
         tileY = animatedY
