@@ -259,6 +259,57 @@ local function drawHudAvatar(character, x, y, diameter)
   love.graphics.setColor(1, 1, 1, 1)
 end
 
+local function buildCharacterPillLines(character, showTeam)
+  local className = character.displayClassName or character.className or "Inconnu"
+  local line1 = nil
+  if character.team == "enemy" then
+    line1 = className
+  else
+    local displayName = Character.getDisplayName(character)
+    line1 = showTeam and string.format("%s  %s (%s)", Character.getTeamDisplayName(character.team), displayName, className) or string.format("%s (%s)", displayName, className)
+  end
+  local line2 = string.format("HP:%d  MOV:%d  DEF:%d  ATK:%d", character.hp, character.mov, character.def, character.atk)
+  return line1, line2
+end
+
+local function drawCharacterPill(character, boxX, boxY, alignRight, showTeam)
+  if not character then
+    return
+  end
+
+  local font = love.graphics.getFont()
+  local line1, line2 = buildCharacterPillLines(character, showTeam)
+  local lineHeight = font:getHeight()
+  local lineGap = math.floor((2 * uiScale) + 0.5)
+  local paddingX = math.floor((18 * uiScale) + 0.5)
+  local paddingY = math.floor((10 * uiScale) + 0.5)
+  local textBlockHeight = (lineHeight * 2) + lineGap
+  local boxHeight = textBlockHeight + (paddingY * 2)
+  local avatarInset = math.floor((5 * uiScale) + 0.5)
+  local avatarSize = boxHeight - (avatarInset * 2)
+  local avatarSpacing = math.floor((14 * uiScale) + 0.5)
+  local textWidth = math.max(font:getWidth(line1), font:getWidth(line2))
+  local extraRightPadding = math.floor((10 * uiScale) + 0.5)
+  local boxWidth = textWidth + (paddingX * 2) + avatarSize + avatarSpacing + extraRightPadding
+  local radius = math.floor(boxHeight * 0.5)
+
+  if alignRight then
+    boxX = boxX - boxWidth
+  end
+
+  local textX = boxX + paddingX + avatarSize + avatarSpacing
+  local textY = boxY + paddingY
+
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
+  love.graphics.setColor(0, 0, 0, 0.18)
+  love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
+  drawHudAvatar(character, boxX + avatarInset, boxY + avatarInset, avatarSize)
+  love.graphics.setColor(0, 0, 0, 1)
+  love.graphics.print(line1, textX, textY)
+  love.graphics.print(line2, textX, textY + lineHeight + lineGap)
+end
+
 local map = {}
 local obstacles = {}
 local characters = {}
@@ -1242,19 +1293,22 @@ function love.draw()
 
   local active = getActiveCharacter()
   local hoveredCharacter = nil
+  local showHoveredTargetPill = false
   local attackAnimation = battle and battle:getAttackAnimation() or nil
   local healAnimation = battle and battle:getHealAnimation() or nil
   if attackAnimation then
     hoveredCharacter = attackAnimation.target
+    showHoveredTargetPill = hoveredCharacter ~= nil
   elseif healAnimation then
     hoveredCharacter = healAnimation.target
   elseif active and isHumanControlledCharacter(active) and not (battle and battle:isAnimating()) then
     local hoverColumn = active.column
     local hoverRow = active.row
-    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isGrappleMode() or battle:isOrderTargetMode() or battle:isOrderMoveMode()) then
+    if battle and (battle:isMoveMode() or battle:isAttackMode() or battle:isHealMode() or battle:isTankMode() or battle:isGrappleMode() or battle:isOrderTargetMode() or battle:isOrderMoveMode()) then
       hoverColumn, hoverRow = battle:getCursorColumnRow(active)
     end
     hoveredCharacter = Character.getAtTile(characters, hoverColumn, hoverRow)
+    showHoveredTargetPill = battle and (battle:isAttackMode() or battle:isTankMode() or battle:isGrappleMode()) or false
   end
 
   if camera then
@@ -1422,37 +1476,15 @@ function love.draw()
   end
 
   if active then
-    local activeName = Character.getDisplayName(active)
-    local activeClassName = active.displayClassName or active.className or "Inconnu"
-    local line1 = Rules.PVP and string.format("%s  %s (%s)", Character.getTeamDisplayName(active.team), activeName, activeClassName) or string.format("%s (%s)", activeName, activeClassName)
-    local line2 = string.format("HP:%d  MOV:%d  DEF:%d  ATK:%d", active.hp, active.mov, active.def, active.atk)
-    local font = love.graphics.getFont()
-    local lineHeight = font:getHeight()
-    local lineGap = math.floor((2 * uiScale) + 0.5)
-    local paddingX = math.floor((18 * uiScale) + 0.5)
-    local paddingY = math.floor((10 * uiScale) + 0.5)
     local boxX = math.floor((10 * uiScale) + 0.5)
     local boxY = math.floor((10 * uiScale) + 0.5)
-    local textBlockHeight = (lineHeight * 2) + lineGap
-    local boxHeight = textBlockHeight + (paddingY * 2)
-    local avatarInset = math.floor((5 * uiScale) + 0.5)
-    local avatarSize = boxHeight - (avatarInset * 2)
-    local avatarSpacing = math.floor((14 * uiScale) + 0.5)
-    local textWidth = math.max(font:getWidth(line1), font:getWidth(line2))
-    local extraRightPadding = math.floor((10 * uiScale) + 0.5)
-    local boxWidth = textWidth + (paddingX * 2) + avatarSize + avatarSpacing + extraRightPadding
-    local radius = math.floor(boxHeight * 0.5)
-    local textX = boxX + paddingX + avatarSize + avatarSpacing
-    local textY = boxY + paddingY
+    drawCharacterPill(active, boxX, boxY, false, Rules.PVP)
 
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight, radius, radius)
-    love.graphics.setColor(0, 0, 0, 0.18)
-    love.graphics.rectangle("line", boxX, boxY, boxWidth, boxHeight, radius, radius)
-    drawHudAvatar(active, boxX + avatarInset, boxY + avatarInset, avatarSize)
-    love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.print(line1, textX, textY)
-    love.graphics.print(line2, textX, textY + lineHeight + lineGap)
+    if showHoveredTargetPill and hoveredCharacter and hoveredCharacter ~= active and hoveredCharacter.team ~= active.team then
+      local screenWidth = love.graphics.getWidth()
+      local rightMargin = math.floor((10 * uiScale) + 0.5)
+      drawCharacterPill(hoveredCharacter, screenWidth - rightMargin, boxY, true, false)
+    end
   else
     local font = love.graphics.getFont()
     local text = "No active character"

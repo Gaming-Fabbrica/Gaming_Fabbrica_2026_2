@@ -55,7 +55,7 @@ Character.heroFirstNames = {
   atk_mov = {boy = "Baldoriu", girl = "Baldoria"},
   counter = {boy = "Tomus", girl = "Tomina"},
   free = {boy = "Ascalu", girl = "Ascala"},
-  grab = {boy = "Cirsoriu", girl = "Cirsoria"},
+  grab = {boy = "Cisoriu", girl = "Cisoria"},
   healer = {boy = "Calandru", girl = "Calandra"},
   javelineer = {boy = "Castino", girl = "Castina"},
   lancer = {boy = "Chimoiu", girl = "Chimoia"},
