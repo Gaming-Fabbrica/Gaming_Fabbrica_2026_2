@@ -1861,9 +1861,8 @@ function Battle:canCounterAttack(attacker, defender)
   end
 
   if not self:isHeroCharacter(defender) and defender.team == "enemy" and attacker.team == "player" then
-    local counterRange = defender.attackRange or 1
     local distance = self:getTileDistance(defender.column, defender.row, attacker.column, attacker.row)
-    return distance ~= nil and distance <= counterRange
+    return distance == 1
   end
 
   return false
